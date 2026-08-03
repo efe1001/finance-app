@@ -1,0 +1,21 @@
+# Secrets - never commit
+credential.txt
+.env
+.env.*
+*.p8
+*-service-account*.json
+firebase-service-account*.json
+
+# Dependencies
+node_modules/
+
+# Build outputs
+build/
+dist/
+android/app/build/
+ios/build/
+.gradle/
+
+# OS files
+.DS_Store
+Thumbs.db
