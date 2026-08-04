@@ -19,3 +19,8 @@ ios/build/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local reference material - not project code
+*.m4a
+transcripts/
+Screenshot*.png
