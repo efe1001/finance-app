@@ -3,6 +3,7 @@ import { StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
+import { CurrencyProvider } from './src/currency/CurrencyContext';
 import { initPushNotifications } from './src/notifications';
 
 import LoginScreen from './src/screens/LoginScreen';
@@ -100,9 +101,11 @@ function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AuthProvider>
-          <Root />
-        </AuthProvider>
+        <CurrencyProvider>
+          <AuthProvider>
+            <Root />
+          </AuthProvider>
+        </CurrencyProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

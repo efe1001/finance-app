@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 
-type Tab = 'approvals' | 'users' | 'stats' | 'settings';
+type Tab = 'approvals' | 'users' | 'stats' | 'wallets' | 'settings';
 
 type PendingTxn = {
   id: number;
@@ -49,19 +49,20 @@ export default function AdminDashboardScreen() {
         </View>
       </View>
 
-      <View style={styles.tabs}>
-        {(['approvals', 'users', 'stats', 'settings'] as Tab[]).map(t => (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs} contentContainerStyle={{ gap: spacing.sm }}>
+        {(['approvals', 'users', 'stats', 'wallets', 'settings'] as Tab[]).map(t => (
           <TouchableOpacity key={t} style={[styles.tabBtn, tab === t && styles.tabBtnOn]} onPress={() => setTab(t)}>
             <Text style={[styles.tabText, tab === t && styles.tabTextOn]}>
-              {t === 'approvals' ? 'Approvals' : t === 'users' ? 'Users' : t === 'stats' ? 'Analytics' : 'Limits'}
+              {t === 'approvals' ? 'Approvals' : t === 'users' ? 'Users' : t === 'stats' ? 'Analytics' : t === 'wallets' ? 'Wallets' : 'Limits'}
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       {tab === 'approvals' && <ApprovalsTab colors={colors} />}
       {tab === 'users' && <UsersTab colors={colors} />}
       {tab === 'stats' && <StatsTab colors={colors} />}
+      {tab === 'wallets' && <WalletsTab colors={colors} />}
       {tab === 'settings' && <LimitsTab colors={colors} />}
     </View>
   );
@@ -244,6 +245,62 @@ function StatsTab({ colors }: { colors: ThemeColors }) {
         <View key={idx} style={styles.breakdownRow}>
           <Text style={styles.breakdownLabel}>{row.type} · {row.status}</Text>
           <Text style={styles.breakdownValue}>{row.count}× · ₦{Math.abs(row.total_ngn).toLocaleString()}</Text>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+function WalletsTab({ colors }: { colors: ThemeColors }) {
+  const styles = getStyles(colors);
+  const [wallets, setWallets] = useState<{ asset: string; address: string }[]>([]);
+  const [edited, setEdited] = useState<Record<string, string>>({});
+  const [savingAsset, setSavingAsset] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api.admin.wallets().then(w => {
+      setWallets(w);
+      const e: Record<string, string> = {};
+      w.forEach(x => (e[x.asset] = x.address));
+      setEdited(e);
+    });
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function save(asset: string) {
+    setSavingAsset(asset);
+    try {
+      await api.admin.updateWallet(asset, edited[asset] ?? '');
+      load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSavingAsset(null);
+    }
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.content}>
+      <Text style={styles.modalHint}>
+        Users sending crypto to sell see this address. Keep these accurate — funds sent to the wrong address can't be recovered.
+      </Text>
+      {wallets.map(w => (
+        <View key={w.asset} style={styles.field}>
+          <Text style={styles.flabel}>{w.asset} DEPOSIT ADDRESS</Text>
+          <TextInput
+            style={styles.input}
+            value={edited[w.asset] ?? ''}
+            onChangeText={v => setEdited(s => ({ ...s, [w.asset]: v }))}
+            placeholder={`Enter ${w.asset} address`}
+            placeholderTextColor={colors.muted}
+            autoCapitalize="none"
+          />
+          <TouchableOpacity style={styles.adjustBtn} onPress={() => save(w.asset)} disabled={savingAsset === w.asset}>
+            <Text style={styles.adjustBtnText}>{savingAsset === w.asset ? 'Saving…' : 'Save Address'}</Text>
+          </TouchableOpacity>
         </View>
       ))}
     </ScrollView>

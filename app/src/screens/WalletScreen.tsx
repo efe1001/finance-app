@@ -1,12 +1,13 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Animated } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { useCurrency } from '../currency/CurrencyContext';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
 
-type Holding = { symbol: string; icon: string; price: number; change: number };
+type Holding = { symbol: string; icon: string; usd: number; changePct: number; qty: number };
 type Transaction = { id: number; title: string; subtitle: string | null; amount_ngn: number; status: string };
 
 const ASSETS = [
@@ -30,27 +31,34 @@ export default function WalletScreen({
   colors: ThemeColors;
 }) {
   const { user } = useAuth();
+  const { currency, setCurrency, format } = useCurrency();
   const styles = getStyles(colors);
   const [tab, setTab] = useState<'holdings' | 'history'>('holdings');
   const [balanceHidden, setBalanceHidden] = useState(false);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [history, setHistory] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
+  const fade = useRef(new Animated.Value(0)).current;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [prices, txns] = await Promise.all([
+      const [prices, txns, myHoldings] = await Promise.all([
         api.cryptoPrices(ASSETS.map(a => a.id).join(',')).catch(() => ({})),
         api.transactions().catch(() => []),
+        api.holdings().catch(() => []),
       ]);
       setHoldings(
-        ASSETS.map(a => ({
-          symbol: a.symbol,
-          icon: a.icon,
-          price: (prices as any)[a.id]?.usd ?? 0,
-          change: (prices as any)[a.id]?.usd_24h_change ?? 0,
-        })),
+        ASSETS.map(a => {
+          const held = (myHoldings as any[]).find(h => h.asset === a.symbol);
+          return {
+            symbol: a.symbol,
+            icon: a.icon,
+            usd: (prices as any)[a.id]?.usd ?? 0,
+            changePct: (prices as any)[a.id]?.usd_24h_change ?? 0,
+            qty: held ? Number(held.amount) : 0,
+          };
+        }),
       );
       setHistory(txns);
     } finally {
@@ -60,7 +68,8 @@ export default function WalletScreen({
 
   useEffect(() => {
     load();
-  }, [load]);
+    Animated.timing(fade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+  }, [load, fade]);
 
   const balanceText = balanceHidden
     ? '••••••'
@@ -73,62 +82,74 @@ export default function WalletScreen({
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
         <View style={styles.balanceHead}>
           <Text style={styles.balanceLabel}>WALLET BALANCE</Text>
-          <TouchableOpacity onPress={() => setBalanceHidden(v => !v)}>
-            <Text style={styles.eyeGlyph}>{balanceHidden ? '◌' : '◉'}</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+            <View style={styles.currencySeg}>
+              <TouchableOpacity style={[styles.currencyChip, currency === 'USD' && styles.currencyChipOn]} onPress={() => setCurrency('USD')}>
+                <Text style={[styles.currencyChipText, currency === 'USD' && styles.currencyChipTextOn]}>USD</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.currencyChip, currency === 'NGN' && styles.currencyChipOn]} onPress={() => setCurrency('NGN')}>
+                <Text style={[styles.currencyChipText, currency === 'NGN' && styles.currencyChipTextOn]}>NGN</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity onPress={() => setBalanceHidden(v => !v)}>
+              <Text style={styles.eyeGlyph}>{balanceHidden ? '◌' : '◉'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <Text style={styles.balanceAmount}>{balanceText}</Text>
 
-        <View style={styles.actionsRow}>
-          {ACTIONS.map(a => (
-            <TouchableOpacity key={a.key} style={styles.actionItem} onPress={() => onNavigate(a.key)}>
-              <IconBadge name={a.icon} size={46} />
-              <Text style={styles.actionLabel}>{a.label}</Text>
+        <Animated.View style={{ opacity: fade }}>
+          <View style={styles.actionsRow}>
+            {ACTIONS.map(a => (
+              <TouchableOpacity key={a.key} style={styles.actionItem} onPress={() => onNavigate(a.key)}>
+                <IconBadge name={a.icon} size={46} />
+                <Text style={styles.actionLabel}>{a.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.tabs}>
+            <TouchableOpacity style={[styles.tabBtn, tab === 'holdings' && styles.tabBtnOn]} onPress={() => setTab('holdings')}>
+              <Text style={[styles.tabText, tab === 'holdings' && styles.tabTextOn]}>All Holdings</Text>
             </TouchableOpacity>
-          ))}
-        </View>
+            <TouchableOpacity style={[styles.tabBtn, tab === 'history' && styles.tabBtnOn]} onPress={() => setTab('history')}>
+              <Text style={[styles.tabText, tab === 'history' && styles.tabTextOn]}>Transaction History</Text>
+            </TouchableOpacity>
+          </View>
 
-        <View style={styles.tabs}>
-          <TouchableOpacity style={[styles.tabBtn, tab === 'holdings' && styles.tabBtnOn]} onPress={() => setTab('holdings')}>
-            <Text style={[styles.tabText, tab === 'holdings' && styles.tabTextOn]}>All Holdings</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.tabBtn, tab === 'history' && styles.tabBtnOn]} onPress={() => setTab('history')}>
-            <Text style={[styles.tabText, tab === 'history' && styles.tabTextOn]}>Transaction History</Text>
-          </TouchableOpacity>
-        </View>
-
-        {tab === 'holdings'
-          ? holdings.map(h => (
-              <View key={h.symbol} style={styles.holdingRow}>
-                <View style={styles.holdingLeft}>
-                  <IconBadge name={h.icon} size={40} />
-                  <View>
-                    <Text style={styles.holdingSymbol}>{h.symbol}</Text>
-                    <Text style={[styles.holdingChange, h.change >= 0 ? { color: colors.jade } : { color: colors.ember }]}>
-                      {h.change >= 0 ? '▲' : '▼'} {Math.abs(h.change).toFixed(2)}%
-                    </Text>
+          {tab === 'holdings'
+            ? holdings.map(h => (
+                <View key={h.symbol} style={styles.holdingRow}>
+                  <View style={styles.holdingLeft}>
+                    <IconBadge name={h.icon} size={40} />
+                    <View>
+                      <Text style={styles.holdingSymbol}>{h.symbol}</Text>
+                      <Text style={[styles.holdingChange, h.changePct >= 0 ? { color: colors.jade } : { color: colors.ember }]}>
+                        {h.changePct >= 0 ? '▲' : '▼'} {Math.abs(h.changePct).toFixed(2)}%
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.holdingValue}>{format(h.qty * h.usd)}</Text>
+                    <Text style={styles.holdingPrice}>{h.qty.toFixed(6)} {h.symbol}</Text>
                   </View>
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.holdingValue}>$0.00</Text>
-                  <Text style={styles.holdingPrice}>${h.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+              ))
+            : history.length === 0
+            ? <Text style={styles.empty}>No transactions yet.</Text>
+            : history.map(t => (
+                <View key={t.id} style={styles.holdingRow}>
+                  <View>
+                    <Text style={styles.holdingSymbol}>{t.title}</Text>
+                    {t.subtitle ? <Text style={styles.holdingChange}>{t.subtitle}</Text> : null}
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.holdingValue}>₦{Math.abs(t.amount_ngn).toLocaleString()}</Text>
+                    <Text style={styles.holdingPrice}>{t.status}</Text>
+                  </View>
                 </View>
-              </View>
-            ))
-          : history.length === 0
-          ? <Text style={styles.empty}>No transactions yet.</Text>
-          : history.map(t => (
-              <View key={t.id} style={styles.holdingRow}>
-                <View>
-                  <Text style={styles.holdingSymbol}>{t.title}</Text>
-                  {t.subtitle ? <Text style={styles.holdingChange}>{t.subtitle}</Text> : null}
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.holdingValue}>₦{Math.abs(t.amount_ngn).toLocaleString()}</Text>
-                  <Text style={styles.holdingPrice}>{t.status}</Text>
-                </View>
-              </View>
-            ))}
+              ))}
+        </Animated.View>
       </ScrollView>
     </View>
   );
@@ -141,6 +162,11 @@ function getStyles(colors: ThemeColors) {
     balanceHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     balanceLabel: { color: colors.muted, fontSize: 11, letterSpacing: 1 },
     eyeGlyph: { color: colors.muted, fontSize: 14 },
+    currencySeg: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: radius.pill, padding: 3, gap: 2 },
+    currencyChip: { paddingVertical: 4, paddingHorizontal: spacing.md, borderRadius: radius.pill },
+    currencyChipOn: { backgroundColor: colors.signal },
+    currencyChipText: { color: colors.muted, fontSize: 10.5, fontWeight: '700' },
+    currencyChipTextOn: { color: colors.signalInk },
     balanceAmount: { color: colors.ink, fontSize: 30, fontWeight: '700', marginTop: spacing.xs, marginBottom: spacing.lg },
     actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xl },
     actionItem: { alignItems: 'center', gap: spacing.xs },

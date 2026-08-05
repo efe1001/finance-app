@@ -34,6 +34,14 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => request<any>('/auth/me'),
+  updateProfile: (body: { name?: string; email?: string }) =>
+    request<any>('/auth/profile', { method: 'PUT', body: JSON.stringify(body) }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: true }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  submitNin: (nin: string) => request<any>('/auth/nin', { method: 'POST', body: JSON.stringify({ nin }) }),
 
   transactions: () => request<any[]>('/wallet/transactions'),
   addTransaction: (body: {
@@ -42,6 +50,8 @@ export const api = {
     subtitle?: string;
     amountNgn: number;
     address?: string;
+    asset?: string;
+    qty?: number;
   }) => request<any>('/wallet/transactions', { method: 'POST', body: JSON.stringify(body) }),
   deposit: (amountNgn: number) =>
     request<{ status: string; message: string }>('/wallet/deposit', {
@@ -54,9 +64,21 @@ export const api = {
       body: JSON.stringify(body),
     }),
   limits: () => request<Record<string, number>>('/wallet/limits'),
+  platformWallets: () => request<{ asset: string; address: string }[]>('/wallet/platform-wallets'),
+  holdings: () => request<{ asset: string; amount: number }[]>('/wallet/holdings'),
+
+  flutterwave: {
+    initiateDeposit: (amountNgn: number) =>
+      request<{ paymentLink: string }>('/flutterwave/initiate', {
+        method: 'POST',
+        body: JSON.stringify({ amountNgn }),
+      }),
+  },
 
   cryptoPrices: (ids = 'bitcoin,ethereum,tether') =>
-    request<Record<string, { usd: number }>>(`/crypto/prices?ids=${ids}&vs_currency=usd`),
+    request<Record<string, { usd: number; usd_24h_change?: number }>>(
+      `/crypto/prices?ids=${ids}&vs_currency=usd`,
+    ),
 
   giftCardRates: () => request<{ brand: string; ratePerDollar: number }[]>('/giftcards/rates'),
   submitGiftCard: (body: { brand: string; faceValueUsd: number; code: string }) =>
@@ -86,5 +108,8 @@ export const api = {
     getSettings: () => request<Record<string, string>>('/admin/settings'),
     updateSettings: (settings: Record<string, string | number>) =>
       request<{ ok: true }>('/admin/settings', { method: 'PUT', body: JSON.stringify(settings) }),
+    wallets: () => request<{ asset: string; address: string; updated_at: string }[]>('/admin/wallets'),
+    updateWallet: (asset: string, address: string) =>
+      request<any>(`/admin/wallets/${asset}`, { method: 'PUT', body: JSON.stringify({ address }) }),
   },
 };

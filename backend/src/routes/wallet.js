@@ -13,15 +13,25 @@ router.get('/transactions', requireAuth, async (req, res) => {
 });
 
 router.post('/transactions', requireAuth, async (req, res) => {
-  const { type, title, subtitle, amountNgn, address } = req.body;
+  const { type, title, subtitle, amountNgn, address, asset, qty } = req.body;
   if (!type || !title || amountNgn == null) {
     return res.status(400).json({ error: 'type, title and amountNgn are required' });
   }
   const { rows } = await pool.query(
-    'INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, address) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-    [req.user.id, type, title, subtitle || null, amountNgn, 'Pending', address || null],
+    'INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, address, asset, qty) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+    [req.user.id, type, title, subtitle || null, amountNgn, 'Pending', address || null, asset || null, qty || null],
   );
   res.status(201).json(rows[0]);
+});
+
+router.get('/platform-wallets', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT asset, address FROM platform_wallets ORDER BY asset');
+  res.json(rows);
+});
+
+router.get('/holdings', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT asset, amount FROM holdings WHERE user_id = $1', [req.user.id]);
+  res.json(rows);
 });
 
 router.post('/deposit', requireAuth, async (req, res) => {

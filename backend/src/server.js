@@ -10,6 +10,7 @@ const cryptoRoutes = require('./routes/crypto');
 const billsRoutes = require('./routes/bills');
 const giftcardsRoutes = require('./routes/giftcards');
 const adminRoutes = require('./routes/admin');
+const flutterwaveRoutes = require('./routes/flutterwave');
 
 const app = express();
 app.use(cors());
@@ -24,6 +25,7 @@ app.use('/api/crypto', cryptoRoutes);
 app.use('/api/bills', billsRoutes);
 app.use('/api/giftcards', giftcardsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/flutterwave', flutterwaveRoutes);
 
 const PORT = process.env.PORT || 4000;
 

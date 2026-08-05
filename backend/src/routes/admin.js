@@ -50,6 +50,18 @@ router.post('/transactions/:id/approve', async (req, res) => {
       txn.amount_ngn,
       txn.user_id,
     ]);
+
+    if (txn.type === 'crypto' && txn.asset && txn.qty != null) {
+      // Buying crypto: NGN goes down (negative amount_ngn), asset holding goes up.
+      // Selling crypto: NGN goes up, asset holding goes down.
+      const holdingDelta = txn.amount_ngn < 0 ? Number(txn.qty) : -Number(txn.qty);
+      await client.query(
+        `INSERT INTO holdings (user_id, asset, amount) VALUES ($1, $2, $3)
+         ON CONFLICT (user_id, asset) DO UPDATE SET amount = holdings.amount + $3`,
+        [txn.user_id, txn.asset, holdingDelta],
+      );
+    }
+
     await client.query('COMMIT');
     res.json({ status: 'Successful' });
   } catch (err) {
@@ -122,6 +134,24 @@ router.get('/stats', async (req, res) => {
     pendingApprovals: pendingCount[0].count,
     breakdown: txnStats.map(r => ({ ...r, total_ngn: Number(r.total_ngn) })),
   });
+});
+
+// --- Platform wallet addresses (users send crypto here when selling) ---
+
+router.get('/wallets', async (req, res) => {
+  const { rows } = await pool.query('SELECT asset, address, updated_at FROM platform_wallets ORDER BY asset');
+  res.json(rows);
+});
+
+router.put('/wallets/:asset', async (req, res) => {
+  const { address } = req.body;
+  if (address == null) return res.status(400).json({ error: 'address is required' });
+  const { rows } = await pool.query(
+    'UPDATE platform_wallets SET address = $1, updated_at = NOW() WHERE asset = $2 RETURNING *',
+    [address, req.params.asset.toUpperCase()],
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Unknown asset' });
+  res.json(rows[0]);
 });
 
 // --- Settings (deposit/withdrawal limits) ---

@@ -7,6 +7,8 @@ type User = {
   email: string;
   walletBalanceNgn: number;
   isAdmin: boolean;
+  referralCode: string;
+  ninStatus: string;
 };
 
 type AuthContextValue = {

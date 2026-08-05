@@ -1,13 +1,14 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Animated } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
+import { useCurrency } from '../currency/CurrencyContext';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
 
-type TickerItem = { symbol: string; id: string; price: string };
+type TickerItem = { symbol: string; id: string; usd: number; changePct: number };
 type Transaction = { id: number; title: string; subtitle: string | null; amount_ngn: number; status: string };
 
 const TICKER_IDS = [
@@ -32,11 +33,13 @@ export default function HomeScreen({
 }) {
   const { user } = useAuth();
   const { colors, mode, toggleMode } = useTheme();
+  const { currency, setCurrency, format } = useCurrency();
   const styles = getStyles(colors);
   const [ticker, setTicker] = useState<TickerItem[]>([]);
   const [activity, setActivity] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [balanceHidden, setBalanceHidden] = useState(false);
+  const fade = useRef(new Animated.Value(0)).current;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,14 +49,12 @@ export default function HomeScreen({
         api.transactions().catch(() => []),
       ]);
       setTicker(
-        TICKER_IDS.map(t => {
-          const usd = (prices as any)[t.id]?.usd;
-          return {
-            symbol: t.symbol,
-            id: t.id,
-            price: usd ? `₦${(usd * 1631).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—',
-          };
-        }),
+        TICKER_IDS.map(t => ({
+          symbol: t.symbol,
+          id: t.id,
+          usd: (prices as any)[t.id]?.usd ?? 0,
+          changePct: (prices as any)[t.id]?.usd_24h_change ?? 0,
+        })),
       );
       setActivity(txns);
     } finally {
@@ -63,7 +64,8 @@ export default function HomeScreen({
 
   useEffect(() => {
     load();
-  }, [load]);
+    Animated.timing(fade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+  }, [load, fade]);
 
   const balanceText = balanceHidden
     ? '••••••'
@@ -87,65 +89,82 @@ export default function HomeScreen({
           </TouchableOpacity>
         </View>
 
-        <View style={styles.balanceCard}>
-          <View style={styles.balanceLabelRow}>
-            <Text style={styles.balanceLabel}>AVAILABLE BALANCE</Text>
-            <TouchableOpacity onPress={() => setBalanceHidden(v => !v)}>
-              <Text style={styles.eyeGlyph}>{balanceHidden ? '◌' : '◉'}</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.balanceAmount}>{balanceText}</Text>
-          <View style={styles.balanceBtnRow}>
-            <TouchableOpacity style={[styles.balanceBtn, styles.depositBtn]} onPress={() => onNavigate('deposit')}>
-              <Text style={styles.balanceBtnText}>Deposit ↙</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.balanceBtn, styles.withdrawBtn]} onPress={() => onNavigate('withdraw')}>
-              <Text style={styles.balanceBtnText}>Withdraw ↗</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.quickActions}>
-          {QUICK_ACTIONS.map(qa => (
-            <TouchableOpacity key={qa.key} style={styles.qaItem} onPress={() => onNavigate(qa.key)}>
-              <IconBadge name={qa.icon} size={48} />
-              <Text style={styles.qaLabel}>{qa.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={styles.ticker}>
-          {ticker.map(item => (
-            <View key={item.symbol} style={styles.tickItem}>
-              <Text style={styles.tickSymbol}>{item.symbol}</Text>
-              <Text style={styles.tickPrice}>{item.price}</Text>
+        <Animated.View style={{ opacity: fade }}>
+          <View style={styles.balanceCard}>
+            <View style={styles.balanceLabelRow}>
+              <Text style={styles.balanceLabel}>AVAILABLE BALANCE</Text>
+              <TouchableOpacity onPress={() => setBalanceHidden(v => !v)}>
+                <Text style={styles.eyeGlyph}>{balanceHidden ? '◌' : '◉'}</Text>
+              </TouchableOpacity>
             </View>
-          ))}
-        </View>
-
-        <Text style={styles.listHead}>RECENT ACTIVITY</Text>
-        {activity.length === 0 && (
-          <Text style={styles.empty}>No activity yet — your transactions will show up here.</Text>
-        )}
-        {activity.map((item, idx) => (
-          <View key={item.id} style={[styles.activityRow, idx === activity.length - 1 && { borderBottomWidth: 0 }]}>
-            <View style={styles.activityLeft}>
-              <View style={styles.activityDot} />
-              <View>
-                <Text style={styles.activityTitle}>{item.title}</Text>
-                {item.subtitle ? <Text style={styles.activitySub}>{item.subtitle}</Text> : null}
-              </View>
+            <Text style={styles.balanceAmount}>{balanceText}</Text>
+            <View style={styles.balanceBtnRow}>
+              <TouchableOpacity style={[styles.balanceBtn, styles.depositBtn]} onPress={() => onNavigate('deposit')}>
+                <Text style={styles.balanceBtnText}>Deposit ↙</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.balanceBtn, styles.withdrawBtn]} onPress={() => onNavigate('withdraw')}>
+                <Text style={styles.balanceBtnText}>Withdraw ↗</Text>
+              </TouchableOpacity>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.activityAmt}>₦{Math.abs(item.amount_ngn).toLocaleString()}</Text>
-              <View style={[styles.pill, item.status === 'Successful' ? styles.pillOk : styles.pillPending]}>
-                <Text style={[styles.pillText, { color: item.status === 'Successful' ? colors.jade : colors.signal }]}>
-                  {item.status}
+          </View>
+
+          <View style={styles.quickActions}>
+            {QUICK_ACTIONS.map(qa => (
+              <TouchableOpacity key={qa.key} style={styles.qaItem} onPress={() => onNavigate(qa.key)}>
+                <IconBadge name={qa.icon} size={48} />
+                <Text style={styles.qaLabel}>{qa.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.tickerHead}>
+            <Text style={styles.listHead}>LIVE PRICES</Text>
+            <View style={styles.currencySeg}>
+              <TouchableOpacity style={[styles.currencyChip, currency === 'USD' && styles.currencyChipOn]} onPress={() => setCurrency('USD')}>
+                <Text style={[styles.currencyChipText, currency === 'USD' && styles.currencyChipTextOn]}>USD</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.currencyChip, currency === 'NGN' && styles.currencyChipOn]} onPress={() => setCurrency('NGN')}>
+                <Text style={[styles.currencyChipText, currency === 'NGN' && styles.currencyChipTextOn]}>NGN</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.ticker}>
+            {ticker.map(item => (
+              <View key={item.symbol} style={styles.tickItem}>
+                <Text style={styles.tickSymbol}>{item.symbol}</Text>
+                <Text style={styles.tickPrice}>{item.usd ? format(item.usd, { maximumFractionDigits: item.usd > 100 ? 0 : 2 }) : '—'}</Text>
+                <Text style={[styles.tickChange, item.changePct >= 0 ? { color: colors.jade } : { color: colors.ember }]}>
+                  {item.changePct >= 0 ? '▲' : '▼'} {Math.abs(item.changePct).toFixed(2)}%
                 </Text>
               </View>
-            </View>
+            ))}
           </View>
-        ))}
+
+          <Text style={styles.listHead}>RECENT ACTIVITY</Text>
+          {activity.length === 0 && (
+            <Text style={styles.empty}>No activity yet — your transactions will show up here.</Text>
+          )}
+          {activity.map((item, idx) => (
+            <View key={item.id} style={[styles.activityRow, idx === activity.length - 1 && { borderBottomWidth: 0 }]}>
+              <View style={styles.activityLeft}>
+                <View style={styles.activityDot} />
+                <View>
+                  <Text style={styles.activityTitle}>{item.title}</Text>
+                  {item.subtitle ? <Text style={styles.activitySub}>{item.subtitle}</Text> : null}
+                </View>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.activityAmt}>₦{Math.abs(item.amount_ngn).toLocaleString()}</Text>
+                <View style={[styles.pill, item.status === 'Successful' ? styles.pillOk : styles.pillPending]}>
+                  <Text style={[styles.pillText, { color: item.status === 'Successful' ? colors.jade : colors.signal }]}>
+                    {item.status}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </Animated.View>
       </ScrollView>
     </View>
   );
@@ -173,10 +192,17 @@ function getStyles(colors: ThemeColors) {
     quickActions: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.lg },
     qaItem: { alignItems: 'center', gap: spacing.xs },
     qaLabel: { color: colors.muted, fontSize: 10, textAlign: 'center' },
+    tickerHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+    currencySeg: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: radius.pill, padding: 3, gap: 2 },
+    currencyChip: { paddingVertical: 4, paddingHorizontal: spacing.md, borderRadius: radius.pill },
+    currencyChipOn: { backgroundColor: colors.signal },
+    currencyChipText: { color: colors.muted, fontSize: 10.5, fontWeight: '700' },
+    currencyChipTextOn: { color: colors.signalInk },
     ticker: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
     tickItem: { flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, padding: spacing.sm },
     tickSymbol: { color: colors.muted, fontSize: 11, fontWeight: '700' },
     tickPrice: { color: colors.ink, fontSize: 13, fontWeight: '700', marginTop: 3 },
+    tickChange: { fontSize: 10, fontWeight: '700', marginTop: 2 },
     listHead: { color: colors.muted, fontSize: 12, letterSpacing: 0.5, marginBottom: spacing.sm },
     empty: { color: colors.muted, fontSize: 12, paddingVertical: spacing.md },
     activityRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.line },
