@@ -58,4 +58,10 @@ export const badgeColors = {
   insurance: '#EF4444',
   giftcard: '#22C55E',
   p2p: '#F97316',
+  withdraw: '#F97316',
+  swap: '#6366F1',
+  alerts: '#EAB308',
+  bitcoin: '#F7931A',
+  ethereum: '#627EEA',
+  tether: '#26A17B',
 };

@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:4000/api';
+const BASE_URL = 'https://finance-app-backend-tzke.onrender.com/api';
 
 let authToken: string | null = null;
 
@@ -41,24 +41,26 @@ export const api = {
     title: string;
     subtitle?: string;
     amountNgn: number;
-    status?: string;
+    address?: string;
   }) => request<any>('/wallet/transactions', { method: 'POST', body: JSON.stringify(body) }),
   deposit: (amountNgn: number) =>
-    request<{ walletBalanceNgn: number }>('/wallet/deposit', {
+    request<{ status: string; message: string }>('/wallet/deposit', {
       method: 'POST',
       body: JSON.stringify({ amountNgn }),
     }),
+  withdraw: (body: { amountNgn: number; accountNumber: string; bankName: string; narration?: string }) =>
+    request<{ status: string; message: string }>('/wallet/withdraw', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  limits: () => request<Record<string, number>>('/wallet/limits'),
 
   cryptoPrices: (ids = 'bitcoin,ethereum,tether') =>
     request<Record<string, { usd: number }>>(`/crypto/prices?ids=${ids}&vs_currency=usd`),
 
   giftCardRates: () => request<{ brand: string; ratePerDollar: number }[]>('/giftcards/rates'),
-  submitGiftCard: (body: {
-    brand: string;
-    faceValueUsd: number;
-    code: string;
-    userId: number;
-  }) => request<any>('/giftcards/submit', { method: 'POST', body: JSON.stringify(body) }),
+  submitGiftCard: (body: { brand: string; faceValueUsd: number; code: string }) =>
+    request<any>('/giftcards/submit', { method: 'POST', body: JSON.stringify(body) }),
 
   p2pListings: () => request<any[]>('/p2p/listings'),
   createP2pListing: (body: {
@@ -68,4 +70,21 @@ export const api = {
     rateNgn: number;
     paymentMethod?: string;
   }) => request<any>('/p2p/listings', { method: 'POST', body: JSON.stringify(body) }),
+
+  admin: {
+    pendingTransactions: (status = 'Pending') => request<any[]>(`/admin/transactions?status=${status}`),
+    approveTransaction: (id: number) => request<any>(`/admin/transactions/${id}/approve`, { method: 'POST' }),
+    rejectTransaction: (id: number, note?: string) =>
+      request<any>(`/admin/transactions/${id}/reject`, { method: 'POST', body: JSON.stringify({ note }) }),
+    users: () => request<any[]>('/admin/users'),
+    adjustBalance: (userId: number, amountNgn: number, note?: string) =>
+      request<any>(`/admin/users/${userId}/adjust-balance`, {
+        method: 'POST',
+        body: JSON.stringify({ amountNgn, note }),
+      }),
+    stats: () => request<any>('/admin/stats'),
+    getSettings: () => request<Record<string, string>>('/admin/settings'),
+    updateSettings: (settings: Record<string, string | number>) =>
+      request<{ ok: true }>('/admin/settings', { method: 'PUT', body: JSON.stringify(settings) }),
+  },
 };

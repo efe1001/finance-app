@@ -13,6 +13,7 @@ async function init() {
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       wallet_balance_ngn NUMERIC NOT NULL DEFAULT 0,
+      is_admin BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
@@ -24,6 +25,8 @@ async function init() {
       subtitle TEXT,
       amount_ngn NUMERIC NOT NULL,
       status TEXT NOT NULL DEFAULT 'Pending',
+      address TEXT,
+      admin_note TEXT,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
@@ -38,6 +41,18 @@ async function init() {
       status TEXT NOT NULL DEFAULT 'Open',
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    INSERT INTO settings (key, value) VALUES
+      ('min_deposit_ngn', '1000'),
+      ('max_deposit_ngn', '5000000'),
+      ('min_withdrawal_ngn', '1000'),
+      ('max_withdrawal_ngn', '2000000')
+    ON CONFLICT (key) DO NOTHING;
   `);
 }
 

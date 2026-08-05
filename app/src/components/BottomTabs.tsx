@@ -6,7 +6,7 @@ import type { ScreenKey } from './Drawer';
 
 const TABS: { key: ScreenKey; label: string; glyph: string }[] = [
   { key: 'home', label: 'Home', glyph: '⌂' },
-  { key: 'trade', label: 'Trade', glyph: '⇅' },
+  { key: 'wallet', label: 'Wallet', glyph: '◈' },
   { key: 'p2p', label: 'P2P', glyph: '⇄' },
 ];
 

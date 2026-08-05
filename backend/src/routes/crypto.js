@@ -14,7 +14,7 @@ router.get('/prices', async (req, res) => {
   const vsCurrency = req.query.vs_currency || 'usd';
   try {
     const { data } = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-      params: { ids, vs_currencies: vsCurrency },
+      params: { ids, vs_currencies: vsCurrency, include_24hr_change: true },
       headers: { 'x-cg-demo-api-key': process.env.COINGECKO_API_KEY },
     });
     res.json(data);

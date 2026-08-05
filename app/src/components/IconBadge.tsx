@@ -27,6 +27,12 @@ const GLYPHS: Record<string, string> = {
   eye: '◉',
   eyeOff: '◌',
   history: '↻',
+  withdraw: '↗',
+  swap: '⇄',
+  alerts: '◔',
+  bitcoin: '₿',
+  ethereum: 'Ξ',
+  tether: '₮',
 };
 
 export default function IconBadge({

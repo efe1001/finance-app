@@ -95,9 +95,14 @@ export default function HomeScreen({
             </TouchableOpacity>
           </View>
           <Text style={styles.balanceAmount}>{balanceText}</Text>
-          <TouchableOpacity style={styles.addMoneyBtn} onPress={() => onNavigate('deposit')}>
-            <Text style={styles.addMoneyText}>Add Money</Text>
-          </TouchableOpacity>
+          <View style={styles.balanceBtnRow}>
+            <TouchableOpacity style={[styles.balanceBtn, styles.depositBtn]} onPress={() => onNavigate('deposit')}>
+              <Text style={styles.balanceBtnText}>Deposit ↙</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.balanceBtn, styles.withdrawBtn]} onPress={() => onNavigate('withdraw')}>
+              <Text style={styles.balanceBtnText}>Withdraw ↗</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.quickActions}>
@@ -160,8 +165,11 @@ function getStyles(colors: ThemeColors) {
     balanceLabel: { color: colors.muted, fontSize: 11, letterSpacing: 1 },
     eyeGlyph: { color: colors.muted, fontSize: 14 },
     balanceAmount: { color: colors.ink, fontSize: 32, fontWeight: '700', marginTop: spacing.sm, marginBottom: spacing.lg },
-    addMoneyBtn: { backgroundColor: colors.signal, borderRadius: radius.pill, paddingVertical: spacing.md, alignItems: 'center' },
-    addMoneyText: { color: colors.signalInk, fontWeight: '700', fontSize: 14 },
+    balanceBtnRow: { flexDirection: 'row', gap: spacing.sm },
+    balanceBtn: { flex: 1, borderRadius: radius.pill, paddingVertical: spacing.md, alignItems: 'center' },
+    depositBtn: { backgroundColor: colors.signal },
+    withdrawBtn: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
+    balanceBtnText: { color: colors.ink, fontWeight: '700', fontSize: 14 },
     quickActions: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.lg },
     qaItem: { alignItems: 'center', gap: spacing.xs },
     qaLabel: { color: colors.muted, fontSize: 10, textAlign: 'center' },

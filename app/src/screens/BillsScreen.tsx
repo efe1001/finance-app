@@ -29,9 +29,9 @@ export default function BillsScreen({ onBack, colors }: { onBack: () => void; co
     if (!recipient || !amount) return;
     setStatus(null);
     try {
-      await api.addTransaction({ type: 'bill', title: selected, subtitle: recipient, amountNgn: -Number(amount), status: 'Successful' });
+      await api.addTransaction({ type: 'bill', title: selected, subtitle: recipient, amountNgn: -Number(amount) });
       await refreshUser();
-      setStatus(`${selected} payment of ₦${amount} submitted.`);
+      setStatus(`${selected} payment of ₦${amount} submitted — awaiting admin approval.`);
       setRecipient('');
       setAmount('');
     } catch (e: any) {

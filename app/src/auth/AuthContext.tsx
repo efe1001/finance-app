@@ -6,6 +6,7 @@ type User = {
   name: string;
   email: string;
   walletBalanceNgn: number;
+  isAdmin: boolean;
 };
 
 type AuthContextValue = {

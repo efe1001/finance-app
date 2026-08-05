@@ -14,20 +14,25 @@ const DRAWER_WIDTH = Math.min(300, Dimensions.get('window').width * 0.8);
 
 export type ScreenKey =
   | 'home'
+  | 'wallet'
   | 'trade'
   | 'p2p'
   | 'giftcards'
   | 'bills'
   | 'deposit'
-  | 'settings';
+  | 'withdraw'
+  | 'settings'
+  | 'admin';
 
 const NAV_ITEMS: { key: ScreenKey; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: '⌂' },
+  { key: 'wallet', label: 'Wallet', icon: '◈' },
   { key: 'trade', label: 'Trade', icon: '⇅' },
   { key: 'p2p', label: 'P2P · Direct', icon: '⇄' },
   { key: 'giftcards', label: 'Gift Cards', icon: '🎁' },
   { key: 'bills', label: 'Bills & Recharge', icon: '▤' },
   { key: 'deposit', label: 'Add Money', icon: '+' },
+  { key: 'withdraw', label: 'Withdraw', icon: '↗' },
   { key: 'settings', label: 'Settings', icon: '⚙' },
 ];
 

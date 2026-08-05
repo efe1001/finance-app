@@ -18,6 +18,7 @@ function publicUser(user) {
     name: user.name,
     email: user.email,
     walletBalanceNgn: Number(user.wallet_balance_ngn),
+    isAdmin: user.is_admin,
   };
 }
 

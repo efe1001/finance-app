@@ -38,7 +38,7 @@ export default function GiftCardsScreen({ onBack, colors }: { onBack: () => void
     if (!user || !card || !faceValue || !code) return;
     setStatus(null);
     try {
-      const res = await api.submitGiftCard({ brand: card.brand, faceValueUsd: parseFloat(faceValue), code, userId: user.id });
+      const res = await api.submitGiftCard({ brand: card.brand, faceValueUsd: parseFloat(faceValue), code });
       setStatus(res.message);
       setFaceValue('');
       setCode('');

@@ -19,6 +19,7 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
   const [prices, setPrices] = useState<Record<string, { usd: number }>>({});
   const [loading, setLoading] = useState(false);
   const [amountUsd, setAmountUsd] = useState('');
+  const [address, setAddress] = useState('');
   const [status, setStatus] = useState<string | null>(null);
 
   const asset = ASSETS[assetIdx];
@@ -44,19 +45,20 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
   const receiveNgn = (parseFloat(amountUsd || '0') * priceNgn).toFixed(2);
 
   async function submitOrder() {
-    if (!user || !amountUsd) return;
+    if (!user || !amountUsd || !address) return;
     setStatus(null);
     try {
       await api.addTransaction({
         type: 'crypto',
-        title: `${side === 'buy' ? 'Bought' : 'Sold'} ${asset.symbol}`,
-        subtitle: `~$${amountUsd}`,
+        title: `${side === 'buy' ? 'Buy' : 'Sell'} ${asset.symbol}`,
+        subtitle: `~$${amountUsd} · ${side === 'buy' ? 'send to' : 'received from'} ${address}`,
         amountNgn: side === 'buy' ? -Number(receiveNgn) : Number(receiveNgn),
-        status: 'Successful',
+        address,
       });
       await refreshUser();
-      setStatus(`${side === 'buy' ? 'Bought' : 'Sold'} order recorded.`);
+      setStatus('Order submitted — awaiting admin confirmation.');
       setAmountUsd('');
+      setAddress('');
     } catch (e: any) {
       setStatus(e.message);
     }
@@ -102,12 +104,17 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
           <Text style={styles.fval}>₦{Number(receiveNgn).toLocaleString()}</Text>
         </View>
 
+        <View style={styles.field}>
+          <Text style={styles.flabel}>{side === 'buy' ? 'YOUR RECEIVING WALLET ADDRESS' : 'WALLET ADDRESS YOU SENT FROM'}</Text>
+          <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder={`${asset.symbol} address`} placeholderTextColor={colors.muted} autoCapitalize="none" />
+        </View>
+
         {status && <Text style={styles.status}>{status}</Text>}
 
-        <TouchableOpacity style={styles.cta} onPress={submitOrder} disabled={!amountUsd}>
-          <Text style={styles.ctaText}>Review {side === 'buy' ? 'Buy' : 'Sell'} Order</Text>
+        <TouchableOpacity style={styles.cta} onPress={submitOrder} disabled={!amountUsd || !address}>
+          <Text style={styles.ctaText}>Submit {side === 'buy' ? 'Buy' : 'Sell'} Order</Text>
         </TouchableOpacity>
-        <Text style={styles.trustNote}>Live prices from CoinGecko. Executed through our licensed liquidity partner.</Text>
+        <Text style={styles.trustNote}>Live prices from CoinGecko. An admin manually confirms and completes every trade.</Text>
       </ScrollView>
     </View>
   );
