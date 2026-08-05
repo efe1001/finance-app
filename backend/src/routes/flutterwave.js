@@ -106,6 +106,28 @@ router.get('/callback', async (req, res) => {
   }
 });
 
+router.get('/banks', requireAuth, async (req, res) => {
+  try {
+    const { data } = await flw.get('/banks/NG');
+    res.json(data.data.map(b => ({ code: b.code, name: b.name })));
+  } catch (err) {
+    res.status(502).json({ error: 'Could not load bank list', detail: err.response?.data?.message || err.message });
+  }
+});
+
+router.post('/resolve-account', requireAuth, async (req, res) => {
+  const { accountNumber, bankCode } = req.body;
+  if (!accountNumber || !bankCode) {
+    return res.status(400).json({ error: 'accountNumber and bankCode are required' });
+  }
+  try {
+    const { data } = await flw.post('/accounts/resolve', { account_number: accountNumber, account_bank: bankCode });
+    res.json({ accountName: data.data.account_name, accountNumber: data.data.account_number });
+  } catch (err) {
+    res.status(502).json({ error: 'Could not resolve account', detail: err.response?.data?.message || err.message });
+  }
+});
+
 function htmlPage(title, message) {
   return `<!doctype html><html><body style="font-family:sans-serif;text-align:center;padding:60px 20px;background:#0B0F17;color:#EDEFF3;">
     <h2>${title}</h2><p style="color:#929CB0;">${message}</p></body></html>`;

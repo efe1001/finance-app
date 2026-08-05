@@ -82,6 +82,7 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
     <View style={styles.screen}>
       <ScreenHeader title="Trade" onBack={onBack} colors={colors} />
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
         <View style={styles.seg}>

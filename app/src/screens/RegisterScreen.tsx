@@ -23,7 +23,7 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.brand}>Finance App</Text>
         <Text style={styles.title}>Create your account</Text>
         <Text style={styles.subtitle}>Start trading, paying bills, and more</Text>

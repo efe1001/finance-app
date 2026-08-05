@@ -78,6 +78,7 @@ export default function WalletScreen({
   return (
     <View style={styles.screen}>
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
         <View style={styles.balanceHead}>
@@ -91,8 +92,8 @@ export default function WalletScreen({
                 <Text style={[styles.currencyChipText, currency === 'NGN' && styles.currencyChipTextOn]}>NGN</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => setBalanceHidden(v => !v)}>
-              <Text style={styles.eyeGlyph}>{balanceHidden ? '◌' : '◉'}</Text>
+            <TouchableOpacity onPress={() => setBalanceHidden(v => !v)} style={styles.eyeBtn} hitSlop={10}>
+              <Text style={styles.eyeGlyph}>{balanceHidden ? '🙈' : '👁'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -161,7 +162,8 @@ function getStyles(colors: ThemeColors) {
     content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
     balanceHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     balanceLabel: { color: colors.muted, fontSize: 11, letterSpacing: 1 },
-    eyeGlyph: { color: colors.muted, fontSize: 14 },
+    eyeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    eyeGlyph: { fontSize: 18 },
     currencySeg: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: radius.pill, padding: 3, gap: 2 },
     currencyChip: { paddingVertical: 4, paddingHorizontal: spacing.md, borderRadius: radius.pill },
     currencyChipOn: { backgroundColor: colors.signal },

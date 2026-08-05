@@ -42,7 +42,7 @@ export default function BillsScreen({ onBack, colors }: { onBack: () => void; co
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Bills & Recharge" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <View style={styles.grid}>
           {BILLERS.map(b => (
             <TouchableOpacity key={b.label} style={styles.tile} onPress={() => setSelected(b.label)}>

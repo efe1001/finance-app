@@ -57,7 +57,7 @@ router.post('/deposit', requireAuth, async (req, res) => {
 });
 
 router.post('/withdraw', requireAuth, async (req, res) => {
-  const { amountNgn, accountNumber, bankName, narration } = req.body;
+  const { amountNgn, accountNumber, bankName, bankCode, accountName, narration } = req.body;
   if (!amountNgn || amountNgn <= 0 || !accountNumber || !bankName) {
     return res.status(400).json({ error: 'amountNgn, accountNumber and bankName are required' });
   }
@@ -82,10 +82,10 @@ router.post('/withdraw', requireAuth, async (req, res) => {
       req.user.id,
       'withdrawal',
       'Withdraw to Bank',
-      narration || `${bankName} · ${accountNumber}`,
+      narration || `${accountName ? accountName + ' · ' : ''}${bankName} · ${accountNumber}`,
       -Math.abs(amountNgn),
       'Pending',
-      `${bankName}:${accountNumber}`,
+      `${bankCode || ''}:${bankName}:${accountNumber}`,
     ],
   );
   res.status(201).json({ status: 'Pending', message: 'Withdrawal submitted — awaiting admin approval.' });

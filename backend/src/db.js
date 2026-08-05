@@ -71,6 +71,16 @@ async function init() {
       PRIMARY KEY (user_id, asset)
     );
 
+    CREATE TABLE IF NOT EXISTS gift_card_rates (
+      brand TEXT PRIMARY KEY,
+      rate_per_dollar NUMERIC NOT NULL
+    );
+
+    INSERT INTO gift_card_rates (brand, rate_per_dollar) VALUES
+      ('Amazon', 850), ('iTunes', 720), ('Steam', 680),
+      ('Google Play', 700), ('Razer Gold', 630), ('Sephora', 610)
+    ON CONFLICT (brand) DO NOTHING;
+
     -- CREATE TABLE IF NOT EXISTS doesn't add columns to a table that already
     -- exists, so new columns on pre-existing tables need explicit migration.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;

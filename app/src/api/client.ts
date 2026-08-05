@@ -58,7 +58,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ amountNgn }),
     }),
-  withdraw: (body: { amountNgn: number; accountNumber: string; bankName: string; narration?: string }) =>
+  withdraw: (body: {
+    amountNgn: number;
+    accountNumber: string;
+    bankName: string;
+    bankCode?: string;
+    accountName?: string;
+    narration?: string;
+  }) =>
     request<{ status: string; message: string }>('/wallet/withdraw', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -72,6 +79,12 @@ export const api = {
       request<{ paymentLink: string }>('/flutterwave/initiate', {
         method: 'POST',
         body: JSON.stringify({ amountNgn }),
+      }),
+    banks: () => request<{ code: string; name: string }[]>('/flutterwave/banks'),
+    resolveAccount: (accountNumber: string, bankCode: string) =>
+      request<{ accountName: string; accountNumber: string }>('/flutterwave/resolve-account', {
+        method: 'POST',
+        body: JSON.stringify({ accountNumber, bankCode }),
       }),
   },
 
@@ -111,5 +124,13 @@ export const api = {
     wallets: () => request<{ asset: string; address: string; updated_at: string }[]>('/admin/wallets'),
     updateWallet: (asset: string, address: string) =>
       request<any>(`/admin/wallets/${asset}`, { method: 'PUT', body: JSON.stringify({ address }) }),
+    giftCardRates: () => request<{ brand: string; ratePerDollar: number }[]>('/admin/giftcard-rates'),
+    updateGiftCardRate: (brand: string, ratePerDollar: number) =>
+      request<any>(`/admin/giftcard-rates/${encodeURIComponent(brand)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ratePerDollar }),
+      }),
+    deleteGiftCardRate: (brand: string) =>
+      request<{ ok: true }>(`/admin/giftcard-rates/${encodeURIComponent(brand)}`, { method: 'DELETE' }),
   },
 };

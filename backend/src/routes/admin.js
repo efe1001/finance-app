@@ -136,6 +136,28 @@ router.get('/stats', async (req, res) => {
   });
 });
 
+// --- Gift card rates ---
+
+router.get('/giftcard-rates', async (req, res) => {
+  const { rows } = await pool.query('SELECT brand, rate_per_dollar FROM gift_card_rates ORDER BY brand');
+  res.json(rows.map(r => ({ brand: r.brand, ratePerDollar: Number(r.rate_per_dollar) })));
+});
+
+router.put('/giftcard-rates/:brand', async (req, res) => {
+  const { ratePerDollar } = req.body;
+  if (!ratePerDollar || ratePerDollar <= 0) return res.status(400).json({ error: 'ratePerDollar must be positive' });
+  const { rows } = await pool.query(
+    'INSERT INTO gift_card_rates (brand, rate_per_dollar) VALUES ($1, $2) ON CONFLICT (brand) DO UPDATE SET rate_per_dollar = $2 RETURNING *',
+    [req.params.brand, ratePerDollar],
+  );
+  res.json({ brand: rows[0].brand, ratePerDollar: Number(rows[0].rate_per_dollar) });
+});
+
+router.delete('/giftcard-rates/:brand', async (req, res) => {
+  await pool.query('DELETE FROM gift_card_rates WHERE brand = $1', [req.params.brand]);
+  res.json({ ok: true });
+});
+
 // --- Platform wallet addresses (users send crypto here when selling) ---
 
 router.get('/wallets', async (req, res) => {

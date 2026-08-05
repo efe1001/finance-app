@@ -67,6 +67,7 @@ export default function P2PScreen({ onBack, colors }: { onBack: () => void; colo
         }
       />
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
         {listings.length === 0 && !loading && <Text style={styles.empty}>No open offers yet. Be the first to list one.</Text>}

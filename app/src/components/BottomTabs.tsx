@@ -3,11 +3,12 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { spacing, ThemeColors } from '../theme';
 import { useAuth } from '../auth/AuthContext';
 import type { ScreenKey } from './Drawer';
+import IconBadge from './IconBadge';
 
-const TABS: { key: ScreenKey; label: string; glyph: string }[] = [
-  { key: 'home', label: 'Home', glyph: '⌂' },
-  { key: 'wallet', label: 'Wallet', glyph: '◈' },
-  { key: 'p2p', label: 'P2P', glyph: '⇄' },
+const TABS: { key: ScreenKey; label: string; icon: string }[] = [
+  { key: 'home', label: 'Home', icon: 'home' },
+  { key: 'wallet', label: 'Wallet', icon: 'trade' },
+  { key: 'p2p', label: 'P2P', icon: 'p2p' },
 ];
 
 export default function BottomTabs({
@@ -28,14 +29,15 @@ export default function BottomTabs({
       {TABS.map(tab => {
         const active = current === tab.key;
         return (
-          <TouchableOpacity key={tab.key} style={styles.tab} onPress={() => onNavigate(tab.key)}>
-            <Text style={[styles.glyph, active && { color: colors.signal }]}>{tab.glyph}</Text>
+          <TouchableOpacity key={tab.key} style={styles.tab} onPress={() => onNavigate(tab.key)} hitSlop={8}>
+            <View style={[styles.iconWrap, active && styles.iconWrapActive]}>
+              <IconBadge name={tab.icon} size={30} glyphSize={15} />
+            </View>
             <Text style={[styles.label, active && { color: colors.ink }]}>{tab.label}</Text>
-            {active && <View style={styles.dot} />}
           </TouchableOpacity>
         );
       })}
-      <TouchableOpacity style={styles.tab} onPress={() => onNavigate('settings')}>
+      <TouchableOpacity style={styles.tab} onPress={() => onNavigate('settings')} hitSlop={8}>
         <View style={[styles.meAvatar, meActive && styles.meAvatarActive]}>
           <Text style={styles.meAvatarText}>{user?.name.charAt(0).toUpperCase() ?? '☺'}</Text>
         </View>
@@ -52,31 +54,32 @@ function getStyles(colors: ThemeColors) {
       backgroundColor: colors.surface,
       borderTopWidth: 1,
       borderTopColor: colors.line,
-      paddingTop: spacing.sm,
+      paddingTop: spacing.md,
       paddingBottom: spacing.lg,
       alignItems: 'flex-start',
     },
-    tab: { flex: 1, alignItems: 'center', gap: 3 },
-    glyph: { fontSize: 20, color: colors.muted },
-    label: { fontSize: 10, color: colors.muted, fontWeight: '600' },
-    dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.signal, marginTop: 2 },
+    tab: { flex: 1, alignItems: 'center', gap: 5 },
+    iconWrap: { borderRadius: 19, padding: 2, opacity: 0.55 },
+    iconWrapActive: { opacity: 1 },
+    label: { fontSize: 10.5, color: colors.muted, fontWeight: '600' },
     meAvatar: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
       backgroundColor: colors.surface2,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 1,
+      opacity: 0.55,
     },
     meAvatarActive: {
       backgroundColor: colors.signal,
+      opacity: 1,
       shadowColor: colors.signal,
       shadowOpacity: 0.6,
       shadowRadius: 8,
       shadowOffset: { width: 0, height: 0 },
       elevation: 4,
     },
-    meAvatarText: { color: colors.ink, fontSize: 11, fontWeight: '700' },
+    meAvatarText: { color: colors.ink, fontSize: 13, fontWeight: '700' },
   });
 }

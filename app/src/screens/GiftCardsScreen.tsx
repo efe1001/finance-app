@@ -51,6 +51,7 @@ export default function GiftCardsScreen({ onBack, colors }: { onBack: () => void
     <View style={styles.screen}>
       <ScreenHeader title="Gift Cards" onBack={onBack} colors={colors} right={<IconBadge name="giftcard" size={30} glyphSize={14} />} />
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadRates} tintColor={colors.signal} />}>
         <Text style={styles.listHead}>SELECT CARD</Text>

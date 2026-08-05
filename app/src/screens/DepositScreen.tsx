@@ -49,7 +49,7 @@ export default function DepositScreen({ onBack, colors }: { onBack: () => void; 
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Add Money" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <Text style={styles.label}>AMOUNT (₦)</Text>
         <TextInput
           style={styles.input}

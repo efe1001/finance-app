@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 
-type Tab = 'approvals' | 'users' | 'stats' | 'wallets' | 'settings';
+type Tab = 'approvals' | 'users' | 'stats' | 'wallets' | 'rates' | 'settings';
 
 type PendingTxn = {
   id: number;
@@ -50,10 +50,10 @@ export default function AdminDashboardScreen() {
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs} contentContainerStyle={{ gap: spacing.sm }}>
-        {(['approvals', 'users', 'stats', 'wallets', 'settings'] as Tab[]).map(t => (
+        {(['approvals', 'users', 'stats', 'wallets', 'rates', 'settings'] as Tab[]).map(t => (
           <TouchableOpacity key={t} style={[styles.tabBtn, tab === t && styles.tabBtnOn]} onPress={() => setTab(t)}>
             <Text style={[styles.tabText, tab === t && styles.tabTextOn]}>
-              {t === 'approvals' ? 'Approvals' : t === 'users' ? 'Users' : t === 'stats' ? 'Analytics' : t === 'wallets' ? 'Wallets' : 'Limits'}
+              {t === 'approvals' ? 'Approvals' : t === 'users' ? 'Users' : t === 'stats' ? 'Analytics' : t === 'wallets' ? 'Wallets' : t === 'rates' ? 'Gift Cards' : 'Limits'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -63,6 +63,7 @@ export default function AdminDashboardScreen() {
       {tab === 'users' && <UsersTab colors={colors} />}
       {tab === 'stats' && <StatsTab colors={colors} />}
       {tab === 'wallets' && <WalletsTab colors={colors} />}
+      {tab === 'rates' && <RatesTab colors={colors} />}
       {tab === 'settings' && <LimitsTab colors={colors} />}
     </View>
   );
@@ -112,7 +113,7 @@ function ApprovalsTab({ colors }: { colors: ThemeColors }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
       {items.length === 0 && !loading && <Text style={styles.empty}>No pending approvals — all caught up.</Text>}
       {items.map(item => (
         <View key={item.id} style={styles.card}>
@@ -175,7 +176,7 @@ function UsersTab({ colors }: { colors: ThemeColors }) {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
         {users.map(u => (
           <View key={u.id} style={styles.card}>
             <View style={styles.cardTop}>
@@ -224,7 +225,7 @@ function StatsTab({ colors }: { colors: ThemeColors }) {
   if (!stats) return <View style={styles.content} />;
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
       <View style={styles.statRow}>
         <View style={styles.statCard}>
           <Text style={styles.statLabel}>TOTAL USERS</Text>
@@ -283,7 +284,7 @@ function WalletsTab({ colors }: { colors: ThemeColors }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
       <Text style={styles.modalHint}>
         Users sending crypto to sell see this address. Keep these accurate — funds sent to the wrong address can't be recovered.
       </Text>
@@ -303,6 +304,109 @@ function WalletsTab({ colors }: { colors: ThemeColors }) {
           </TouchableOpacity>
         </View>
       ))}
+    </ScrollView>
+  );
+}
+
+function RatesTab({ colors }: { colors: ThemeColors }) {
+  const styles = getStyles(colors);
+  const [rates, setRates] = useState<{ brand: string; ratePerDollar: number }[]>([]);
+  const [edited, setEdited] = useState<Record<string, string>>({});
+  const [savingBrand, setSavingBrand] = useState<string | null>(null);
+  const [newBrand, setNewBrand] = useState('');
+  const [newRate, setNewRate] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  const load = useCallback(() => {
+    api.admin.giftCardRates().then(r => {
+      setRates(r);
+      const e: Record<string, string> = {};
+      r.forEach(x => (e[x.brand] = String(x.ratePerDollar)));
+      setEdited(e);
+    });
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function save(brand: string) {
+    setSavingBrand(brand);
+    try {
+      await api.admin.updateGiftCardRate(brand, Number(edited[brand]));
+      load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSavingBrand(null);
+    }
+  }
+
+  async function remove(brand: string) {
+    setSavingBrand(brand);
+    try {
+      await api.admin.deleteGiftCardRate(brand);
+      load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSavingBrand(null);
+    }
+  }
+
+  async function addNew() {
+    if (!newBrand || !newRate) return;
+    setAdding(true);
+    try {
+      await api.admin.updateGiftCardRate(newBrand, Number(newRate));
+      setNewBrand('');
+      setNewRate('');
+      load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      <Text style={styles.modalHint}>
+        Rate is what a user is paid per $1 face value. Edit and save, or add a new card brand below.
+      </Text>
+      {rates.map(r => (
+        <View key={r.brand} style={styles.field}>
+          <Text style={styles.flabel}>{r.brand.toUpperCase()} — ₦ PER $1</Text>
+          <TextInput
+            style={styles.input}
+            value={edited[r.brand] ?? ''}
+            onChangeText={v => setEdited(s => ({ ...s, [r.brand]: v }))}
+            keyboardType="decimal-pad"
+            placeholderTextColor={colors.muted}
+          />
+          <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
+            <TouchableOpacity style={[styles.adjustBtn, { flex: 1 }]} onPress={() => save(r.brand)} disabled={savingBrand === r.brand}>
+              <Text style={styles.adjustBtnText}>{savingBrand === r.brand ? 'Saving…' : 'Save'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.rejectBtn, { flex: 1 }]} onPress={() => remove(r.brand)} disabled={savingBrand === r.brand}>
+              <Text style={styles.rejectText}>Remove</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ))}
+
+      <Text style={styles.sectionHead}>ADD NEW CARD BRAND</Text>
+      <View style={styles.field}>
+        <Text style={styles.flabel}>BRAND NAME</Text>
+        <TextInput style={styles.input} value={newBrand} onChangeText={setNewBrand} placeholder="e.g. Vanilla" placeholderTextColor={colors.muted} />
+      </View>
+      <View style={styles.field}>
+        <Text style={styles.flabel}>₦ PER $1</Text>
+        <TextInput style={styles.input} value={newRate} onChangeText={setNewRate} keyboardType="decimal-pad" placeholderTextColor={colors.muted} />
+      </View>
+      <TouchableOpacity style={styles.cta} onPress={addNew} disabled={adding || !newBrand || !newRate}>
+        <Text style={styles.ctaText}>{adding ? 'Adding…' : 'Add Card Brand'}</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -336,7 +440,7 @@ function LimitsTab({ colors }: { colors: ThemeColors }) {
   ];
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
       {fields.map(f => (
         <View key={f.key} style={styles.field}>
           <Text style={styles.flabel}>{f.label}</Text>

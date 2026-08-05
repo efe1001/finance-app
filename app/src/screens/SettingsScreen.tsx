@@ -77,7 +77,7 @@ function RootSettings({
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Profile" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{user?.name.charAt(0).toUpperCase()}</Text>
@@ -174,7 +174,7 @@ function ProfileScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
   return (
     <View style={styles.screen}>
       <ScreenHeader title="My Profile" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <View style={styles.field}>
           <Text style={styles.flabel}>FULL NAME</Text>
           <TextInput style={styles.input} value={name} onChangeText={setName} placeholderTextColor={colors.muted} />
@@ -217,7 +217,7 @@ function PasswordScreen({ onBack, colors }: { onBack: () => void; colors: ThemeC
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Reset Password" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <View style={styles.field}>
           <Text style={styles.flabel}>CURRENT PASSWORD</Text>
           <TextInput style={styles.input} value={current} onChangeText={setCurrent} secureTextEntry placeholderTextColor={colors.muted} />
@@ -260,7 +260,7 @@ function NinScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Verify NIN" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <Text style={styles.modalHint}>Current status: {user?.ninStatus ?? 'unverified'}</Text>
         <View style={styles.field}>
           <Text style={styles.flabel}>NATIONAL IDENTIFICATION NUMBER</Text>
@@ -283,7 +283,7 @@ function ReferralsScreen({ onBack, colors }: { onBack: () => void; colors: Theme
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Referrals" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <Text style={styles.modalHint}>Share your code — friends who sign up with it help you both.</Text>
         <View style={styles.referralCard}>
           <Text style={styles.referralCode}>{code}</Text>
@@ -315,7 +315,7 @@ function ReportsScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Reports" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <View style={styles.statRow}>
           <View style={styles.statCard}>
             <Text style={styles.flabel}>TOTAL SPENT</Text>
@@ -344,7 +344,7 @@ function LegalScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColo
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Legal" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <Text style={styles.sectionHead}>TERMS OF SERVICE</Text>
         <Text style={styles.legalText}>
           By using this app you agree that all deposits, withdrawals, and crypto trades are reviewed and
@@ -367,7 +367,7 @@ function SupportScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Help & Support" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <Text style={styles.modalHint}>
           Something wrong with a transaction, or a question about the app? Reach out and an admin will get
           back to you.

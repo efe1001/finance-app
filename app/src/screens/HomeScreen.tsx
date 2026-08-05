@@ -21,6 +21,7 @@ const QUICK_ACTIONS: { key: ScreenKey; label: string; icon: string }[] = [
   { key: 'deposit', label: 'Add Money', icon: 'fund' },
   { key: 'trade', label: 'Trade', icon: 'trade' },
   { key: 'p2p', label: 'P2P', icon: 'p2p' },
+  { key: 'giftcards', label: 'Gift Cards', icon: 'giftcard' },
   { key: 'bills', label: 'Bills', icon: 'bills' },
 ];
 
@@ -74,6 +75,7 @@ export default function HomeScreen({
   return (
     <View style={styles.screen}>
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
         <View style={styles.topBar}>
@@ -93,8 +95,8 @@ export default function HomeScreen({
           <View style={styles.balanceCard}>
             <View style={styles.balanceLabelRow}>
               <Text style={styles.balanceLabel}>AVAILABLE BALANCE</Text>
-              <TouchableOpacity onPress={() => setBalanceHidden(v => !v)}>
-                <Text style={styles.eyeGlyph}>{balanceHidden ? '◌' : '◉'}</Text>
+              <TouchableOpacity onPress={() => setBalanceHidden(v => !v)} style={styles.eyeBtn} hitSlop={10}>
+                <Text style={styles.eyeGlyph}>{balanceHidden ? '🙈' : '👁'}</Text>
               </TouchableOpacity>
             </View>
             <Text style={styles.balanceAmount}>{balanceText}</Text>
@@ -182,7 +184,8 @@ function getStyles(colors: ThemeColors) {
     balanceCard: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: spacing.xl, marginBottom: spacing.lg },
     balanceLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     balanceLabel: { color: colors.muted, fontSize: 11, letterSpacing: 1 },
-    eyeGlyph: { color: colors.muted, fontSize: 14 },
+    eyeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    eyeGlyph: { fontSize: 18 },
     balanceAmount: { color: colors.ink, fontSize: 32, fontWeight: '700', marginTop: spacing.sm, marginBottom: spacing.lg },
     balanceBtnRow: { flexDirection: 'row', gap: spacing.sm },
     balanceBtn: { flex: 1, borderRadius: radius.pill, paddingVertical: spacing.md, alignItems: 'center' },
