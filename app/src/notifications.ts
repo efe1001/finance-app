@@ -1,17 +1,24 @@
-import messaging from '@react-native-firebase/messaging';
+import {
+  getMessaging,
+  requestPermission,
+  getToken,
+  onMessage,
+  AuthorizationStatus,
+} from '@react-native-firebase/messaging';
 
 export async function initPushNotifications(onToken: (token: string) => void) {
-  const authStatus = await messaging().requestPermission();
+  const messaging = getMessaging();
+  const authStatus = await requestPermission(messaging);
   const enabled =
-    authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-    authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+    authStatus === AuthorizationStatus.AUTHORIZED ||
+    authStatus === AuthorizationStatus.PROVISIONAL;
 
   if (!enabled) return;
 
-  const token = await messaging().getToken();
+  const token = await getToken(messaging);
   onToken(token);
 
-  return messaging().onMessage(async remoteMessage => {
+  return onMessage(messaging, async remoteMessage => {
     console.log('Push received in foreground:', remoteMessage);
   });
 }

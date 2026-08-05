@@ -16,6 +16,9 @@ android/app/build/
 ios/build/
 .gradle/
 
+# Local database
+*.db
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -24,3 +27,4 @@ Thumbs.db
 *.m4a
 transcripts/
 Screenshot*.png
+photo_*.jpg

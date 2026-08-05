@@ -1,53 +1,113 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import { useEffect } from 'react';
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import React, { useEffect, useState } from 'react';
+import { StatusBar, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AuthProvider, useAuth } from './src/auth/AuthContext';
+import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { initPushNotifications } from './src/notifications';
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+import LoginScreen from './src/screens/LoginScreen';
+import RegisterScreen from './src/screens/RegisterScreen';
+import HomeScreen from './src/screens/HomeScreen';
+import TradeScreen from './src/screens/TradeScreen';
+import P2PScreen from './src/screens/P2PScreen';
+import GiftCardsScreen from './src/screens/GiftCardsScreen';
+import BillsScreen from './src/screens/BillsScreen';
+import DepositScreen from './src/screens/DepositScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import Drawer, { ScreenKey } from './src/components/Drawer';
+import BottomTabs from './src/components/BottomTabs';
 
-  useEffect(() => {
-    initPushNotifications(token => {
-      console.log('FCM token:', token);
-    });
-  }, []);
-
-  return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
-    </SafeAreaProvider>
+function AuthGate() {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  return mode === 'login' ? (
+    <LoginScreen onGoToRegister={() => setMode('register')} />
+  ) : (
+    <RegisterScreen onGoToLogin={() => setMode('login')} />
   );
 }
 
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
+const TAB_SCREENS: ScreenKey[] = ['home', 'trade', 'p2p', 'settings'];
+
+function MainShell() {
+  const { user, logout } = useAuth();
+  const { colors } = useTheme();
+  const [screen, setScreen] = useState<ScreenKey>('home');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const styles = getStyles();
+
+  function navigate(key: ScreenKey) {
+    setScreen(key);
+    setDrawerOpen(false);
+  }
+  const goHome = () => navigate('home');
 
   return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
+    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      <View style={styles.body}>
+        {screen === 'home' && <HomeScreen onOpenDrawer={() => setDrawerOpen(true)} onNavigate={navigate} />}
+        {screen === 'trade' && <TradeScreen onBack={goHome} colors={colors} />}
+        {screen === 'p2p' && <P2PScreen onBack={goHome} colors={colors} />}
+        {screen === 'giftcards' && <GiftCardsScreen onBack={goHome} colors={colors} />}
+        {screen === 'bills' && <BillsScreen onBack={goHome} colors={colors} />}
+        {screen === 'deposit' && <DepositScreen onBack={goHome} colors={colors} />}
+        {screen === 'settings' && <SettingsScreen onBack={goHome} colors={colors} />}
+      </View>
+
+      {TAB_SCREENS.includes(screen) && <BottomTabs current={screen} onNavigate={navigate} colors={colors} />}
+
+      <Drawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        current={screen}
+        onNavigate={navigate}
+        userName={user?.name ?? ''}
+        userEmail={user?.email ?? ''}
+        onLogout={() => {
+          setDrawerOpen(false);
+          logout();
+        }}
+        colors={colors}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});
+function Root() {
+  const { user } = useAuth();
+  const { colors, mode } = useTheme();
+
+  useEffect(() => {
+    if (!user) return;
+    initPushNotifications(token => {
+      console.log('FCM token:', token);
+    });
+  }, [user]);
+
+  return (
+    <>
+      <StatusBar barStyle={mode === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.bg} />
+      {user ? <MainShell /> : <AuthGate />}
+    </>
+  );
+}
+
+function App() {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <Root />
+        </AuthProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
+  );
+}
+
+function getStyles() {
+  return StyleSheet.create({
+    container: { flex: 1 },
+    body: { flex: 1 },
+  });
+}
 
 export default App;
