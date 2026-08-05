@@ -3,6 +3,17 @@ const { pool } = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
+
+// One-time bootstrap to promote the first admin — protected by the server's own
+// JWT secret so only someone with deploy access can call it. Remove once no longer needed.
+router.post('/bootstrap', async (req, res) => {
+  const { email, secret } = req.body;
+  if (secret !== process.env.JWT_SECRET) return res.status(403).json({ error: 'Invalid secret' });
+  const { rows } = await pool.query('UPDATE users SET is_admin = TRUE WHERE email = $1 RETURNING id, name, email', [email]);
+  if (!rows.length) return res.status(404).json({ error: 'No user with that email' });
+  res.json({ promoted: rows[0] });
+});
+
 router.use(requireAuth, requireAdmin);
 
 // --- Transaction approvals ---
