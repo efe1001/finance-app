@@ -53,6 +53,12 @@ async function init() {
       ('min_withdrawal_ngn', '1000'),
       ('max_withdrawal_ngn', '2000000')
     ON CONFLICT (key) DO NOTHING;
+
+    -- CREATE TABLE IF NOT EXISTS doesn't add columns to a table that already
+    -- exists, so new columns on pre-existing tables need explicit migration.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS address TEXT;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS admin_note TEXT;
   `);
 }
 
