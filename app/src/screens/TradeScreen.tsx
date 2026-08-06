@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Clipboard, Alert } from 'react-native';
-import DocumentPicker, { DocumentPickerResponse } from 'react-native-document-picker';
+import { pick, isErrorWithCode, errorCodes, types as pickerTypes, DocumentPickerResponse } from '@react-native-documents/picker';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -108,14 +108,16 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
 
   async function pickReceipt() {
     try {
-      const res = await DocumentPicker.pickSingle({ type: [DocumentPicker.types.allFiles] });
+      const [res] = await pick({ type: [pickerTypes.allFiles] });
       if ((res.size ?? 0) > MAX_RECEIPT_BYTES) {
         Alert.alert('File too large', 'Please attach a file under 5MB.');
         return;
       }
       setReceipt(res);
     } catch (e) {
-      if (!DocumentPicker.isCancel(e)) Alert.alert('Error', 'Could not select that file.');
+      if (!isErrorWithCode(e) || e.code !== errorCodes.OPERATION_CANCELED) {
+        Alert.alert('Error', 'Could not select that file.');
+      }
     }
   }
 
@@ -126,7 +128,7 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
     try {
       let receiptData: string | undefined;
       if (side === 'sell' && receipt) {
-        receiptData = await readFileAsBase64(receipt.fileCopyUri ?? receipt.uri);
+        receiptData = await readFileAsBase64(receipt.uri);
       }
 
       await api.addTransaction({
