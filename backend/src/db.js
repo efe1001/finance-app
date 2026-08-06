@@ -81,12 +81,24 @@ async function init() {
       ('Google Play', 700), ('Razer Gold', 630), ('Sephora', 610)
     ON CONFLICT (brand) DO NOTHING;
 
+    CREATE TABLE IF NOT EXISTS quidax_addresses (
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      asset TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      address TEXT,
+      network TEXT,
+      quidax_wallet_id TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, asset)
+    );
+
     -- CREATE TABLE IF NOT EXISTS doesn't add columns to a table that already
     -- exists, so new columns on pre-existing tables need explicit migration.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS nin TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS nin_status TEXT NOT NULL DEFAULT 'unverified';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS quidax_user_id TEXT;
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS address TEXT;
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS admin_note TEXT;
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS asset TEXT;

@@ -64,4 +64,13 @@ export const badgeColors = {
   bitcoin: '#F7931A',
   ethereum: '#627EEA',
   tether: '#26A17B',
+  approvals: '#10B981',
+  users: '#3B82F6',
+  stats: '#8B5CF6',
+  vault: '#F59E0B',
+  limits: '#6B7280',
+  crypto: '#F59E0B',
+  admin_adjustment: '#6366F1',
+  deposit: '#3B82F6',
+  withdrawal: '#F97316',
 };

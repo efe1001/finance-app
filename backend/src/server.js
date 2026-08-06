@@ -11,10 +11,11 @@ const billsRoutes = require('./routes/bills');
 const giftcardsRoutes = require('./routes/giftcards');
 const adminRoutes = require('./routes/admin');
 const flutterwaveRoutes = require('./routes/flutterwave');
+const quidaxRoutes = require('./routes/quidax');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -26,6 +27,7 @@ app.use('/api/bills', billsRoutes);
 app.use('/api/giftcards', giftcardsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/flutterwave', flutterwaveRoutes);
+app.use('/api/quidax', quidaxRoutes);
 
 const PORT = process.env.PORT || 4000;
 

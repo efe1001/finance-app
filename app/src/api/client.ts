@@ -88,6 +88,11 @@ export const api = {
       }),
   },
 
+  quidax: {
+    depositAddress: (asset: string) =>
+      request<{ status: 'ready' | 'pending'; address: string | null }>(`/quidax/deposit-address/${asset.toLowerCase()}`),
+  },
+
   cryptoPrices: (ids = 'bitcoin,ethereum,tether') =>
     request<Record<string, { usd: number; usd_24h_change?: number }>>(
       `/crypto/prices?ids=${ids}&vs_currency=usd`,

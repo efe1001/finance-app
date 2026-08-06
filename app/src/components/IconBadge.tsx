@@ -33,6 +33,15 @@ const GLYPHS: Record<string, string> = {
   bitcoin: '₿',
   ethereum: 'Ξ',
   tether: '₮',
+  approvals: '✓',
+  users: '👥',
+  stats: '📊',
+  vault: '🏦',
+  limits: '⚙',
+  crypto: '⇅',
+  admin_adjustment: '⇄',
+  deposit: '+',
+  withdrawal: '↗',
 };
 
 export default function IconBadge({

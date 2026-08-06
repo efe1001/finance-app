@@ -2,10 +2,9 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 
-const QUIDAX_BASE_URL = 'https://www.quidax.com/api/v1';
 const quidax = axios.create({
-  baseURL: QUIDAX_BASE_URL,
-  headers: { Authorization: `Bearer ${process.env.QUIDAX_SECRET_KEY}` },
+  baseURL: 'https://openapi.quidax.io/exchange-open-api/api/v1',
+  headers: { Authorization: `Bearer ${process.env.QUIDAX_API_KEY}` },
 });
 
 // Live price feed (CoinGecko)
