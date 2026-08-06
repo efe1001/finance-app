@@ -5,6 +5,7 @@ credential.txt
 *.p8
 *-service-account*.json
 firebase-service-account*.json
+*firebase-adminsdk*.json
 
 # Dependencies
 node_modules/

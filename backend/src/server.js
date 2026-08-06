@@ -15,7 +15,8 @@ const quidaxRoutes = require('./routes/quidax');
 
 const app = express();
 app.use(cors());
-app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }));
+// Raised from Express's 100kb default to fit base64-encoded receipt uploads (~5MB raw).
+app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

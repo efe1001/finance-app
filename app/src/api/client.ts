@@ -6,6 +6,10 @@ export function setAuthToken(token: string | null) {
   authToken = token;
 }
 
+export function getAuthToken() {
+  return authToken;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -52,6 +56,9 @@ export const api = {
     address?: string;
     asset?: string;
     qty?: number;
+    receiptData?: string;
+    receiptMime?: string;
+    receiptFilename?: string;
   }) => request<any>('/wallet/transactions', { method: 'POST', body: JSON.stringify(body) }),
   deposit: (amountNgn: number) =>
     request<{ status: string; message: string }>('/wallet/deposit', {
@@ -137,5 +144,6 @@ export const api = {
       }),
     deleteGiftCardRate: (brand: string) =>
       request<{ ok: true }>(`/admin/giftcard-rates/${encodeURIComponent(brand)}`, { method: 'DELETE' }),
+    receiptFileUrl: (id: number) => `${BASE_URL}/admin/transactions/${id}/receipt-file?token=${encodeURIComponent(authToken ?? '')}`,
   },
 };

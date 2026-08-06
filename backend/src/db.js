@@ -105,6 +105,9 @@ async function init() {
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS asset TEXT;
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS qty NUMERIC;
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS provider_ref TEXT UNIQUE;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt_data TEXT;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt_mime TEXT;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt_filename TEXT;
 
     UPDATE users SET referral_code = 'FA' || LPAD(id::text, 6, '0') WHERE referral_code IS NULL;
   `);

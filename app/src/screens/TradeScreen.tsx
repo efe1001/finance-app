@@ -1,9 +1,29 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Clipboard } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Clipboard, Alert } from 'react-native';
+import DocumentPicker, { DocumentPickerResponse } from 'react-native-document-picker';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ScreenHeader from '../components/ScreenHeader';
+
+const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
+
+function readFileAsBase64(uri: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    fetch(uri)
+      .then(res => res.blob())
+      .then(blob => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Could not read file'));
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1] ?? '');
+        };
+        reader.readAsDataURL(blob);
+      })
+      .catch(reject);
+  });
+}
 
 const ASSETS = [
   { id: 'bitcoin', symbol: 'BTC' },
@@ -28,6 +48,8 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
   const [myAddress, setMyAddress] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [addressCopied, setAddressCopied] = useState(false);
+  const [receipt, setReceipt] = useState<DocumentPickerResponse | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // --- Quidax per-user deposit addresses: built and tested, but on hold until the
   // Quidax account is approved for business/merchant access (sub-accounts API is
@@ -84,10 +106,29 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
     setTimeout(() => setAddressCopied(false), 1800);
   }
 
+  async function pickReceipt() {
+    try {
+      const res = await DocumentPicker.pickSingle({ type: [DocumentPicker.types.allFiles] });
+      if ((res.size ?? 0) > MAX_RECEIPT_BYTES) {
+        Alert.alert('File too large', 'Please attach a file under 5MB.');
+        return;
+      }
+      setReceipt(res);
+    } catch (e) {
+      if (!DocumentPicker.isCancel(e)) Alert.alert('Error', 'Could not select that file.');
+    }
+  }
+
   async function submitOrder() {
     if (!user || !canSubmit) return;
     setStatus(null);
+    setSubmitting(true);
     try {
+      let receiptData: string | undefined;
+      if (side === 'sell' && receipt) {
+        receiptData = await readFileAsBase64(receipt.fileCopyUri ?? receipt.uri);
+      }
+
       await api.addTransaction({
         type: 'crypto',
         title: `${side === 'buy' ? 'Buy' : 'Sell'} ${asset.symbol}`,
@@ -99,13 +140,19 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
         address: side === 'buy' ? myAddress : platformAddress,
         asset: asset.symbol,
         qty,
+        receiptData,
+        receiptMime: receipt?.type ?? undefined,
+        receiptFilename: receipt?.name ?? undefined,
       });
       await refreshUser();
       setStatus('Order submitted — awaiting admin confirmation.');
+      setReceipt(null);
       setAmountUsd('');
       setMyAddress('');
     } catch (e: any) {
       setStatus(e.message);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -181,10 +228,29 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
           </View>
         )}
 
+        {side === 'sell' && (
+          <View style={styles.field}>
+            <Text style={styles.flabel}>SEND RECEIPT (OPTIONAL)</Text>
+            {receipt ? (
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptName} numberOfLines={1}>{receipt.name}</Text>
+                <TouchableOpacity onPress={() => setReceipt(null)}>
+                  <Text style={styles.receiptRemove}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.attachBtn} onPress={pickReceipt}>
+                <Text style={styles.attachBtnText}>📎 Attach photo, PDF, or file</Text>
+              </TouchableOpacity>
+            )}
+            <Text style={styles.fsub}>Proof of your send — a screenshot, PDF, or any file. Not required.</Text>
+          </View>
+        )}
+
         {status && <Text style={styles.status}>{status}</Text>}
 
-        <TouchableOpacity style={[styles.cta, !canSubmit && { opacity: 0.5 }]} onPress={submitOrder} disabled={!canSubmit}>
-          <Text style={styles.ctaText}>Submit {side === 'buy' ? 'Buy' : 'Sell'} Order</Text>
+        <TouchableOpacity style={[styles.cta, (!canSubmit || submitting) && { opacity: 0.5 }]} onPress={submitOrder} disabled={!canSubmit || submitting}>
+          <Text style={styles.ctaText}>{submitting ? 'Submitting…' : `Submit ${side === 'buy' ? 'Buy' : 'Sell'} Order`}</Text>
         </TouchableOpacity>
         <Text style={styles.trustNote}>Live prices from CoinGecko. An admin manually confirms and completes every trade.</Text>
       </ScrollView>
@@ -220,6 +286,11 @@ function getStyles(colors: ThemeColors) {
     copyBtnText: { color: colors.ink, fontSize: 11.5, fontWeight: '700' },
     status: { color: colors.jade, fontSize: 12, marginTop: spacing.sm, marginBottom: spacing.sm },
     insufficientText: { color: colors.ember, fontSize: 12, marginTop: -spacing.xs, marginBottom: spacing.sm },
+    attachBtn: { backgroundColor: colors.surface2, borderRadius: radius.sm, paddingVertical: spacing.md, alignItems: 'center', marginTop: spacing.xs },
+    attachBtnText: { color: colors.ink, fontSize: 13, fontWeight: '600' },
+    receiptRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface2, borderRadius: radius.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.md, marginTop: spacing.xs },
+    receiptName: { flex: 1, color: colors.ink, fontSize: 13, fontWeight: '600', marginRight: spacing.sm },
+    receiptRemove: { color: colors.ember, fontSize: 12, fontWeight: '700' },
     cta: { backgroundColor: colors.signal, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center', marginTop: spacing.md },
     ctaText: { color: colors.signalInk, fontWeight: '700', fontSize: 14 },
     trustNote: { color: colors.muted, fontSize: 10.5, textAlign: 'center', marginTop: spacing.md, lineHeight: 16 },

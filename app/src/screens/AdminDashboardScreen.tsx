@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Modal, Alert, Clipboard } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Modal, Alert, Clipboard, Linking } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -15,6 +15,7 @@ type PendingTxn = {
   subtitle: string | null;
   amount_ngn: number;
   address: string | null;
+  has_receipt: boolean;
   user_name: string;
   user_email: string;
 };
@@ -221,6 +222,11 @@ function ApprovalsTab({ colors, onChanged }: { colors: ThemeColors; onChanged: (
                       </TouchableOpacity>
                     </View>
                   ) : null}
+                  {item.has_receipt && (
+                    <TouchableOpacity onPress={() => Linking.openURL(api.admin.receiptFileUrl(item.id))}>
+                      <Text style={styles.receiptLink}>📎 View Receipt</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
               <Text style={[styles.cardAmt, item.amount_ngn < 0 ? { color: colors.ember } : { color: colors.jade }]}>
@@ -635,6 +641,7 @@ function getStyles(colors: ThemeColors) {
     addressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 4 },
     copyBtn: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2 },
     copyBtnText: { color: colors.ink, fontSize: 10.5, fontWeight: '700' },
+    receiptLink: { color: colors.signal, fontSize: 11.5, fontWeight: '700', marginTop: 6 },
     cardAmt: { color: colors.ink, fontSize: 14, fontWeight: '700' },
     cardActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
     autoChip: { backgroundColor: 'rgba(226,163,58,0.16)', borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2 },

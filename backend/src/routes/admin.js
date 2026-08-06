@@ -1,4 +1,5 @@
 const express = require('express');
+const jwt = require('jsonwebtoken');
 const { pool } = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 
@@ -14,6 +15,30 @@ router.post('/bootstrap', async (req, res) => {
   res.json({ promoted: rows[0] });
 });
 
+// Receipt files are opened via Linking.openURL from the app, which can't attach an
+// Authorization header — so this one route takes the token as a query param instead
+// and verifies it manually, ahead of the header-based requireAuth used everywhere else.
+router.get('/transactions/:id/receipt-file', async (req, res) => {
+  try {
+    const payload = jwt.verify(req.query.token || '', process.env.JWT_SECRET);
+    const { rows: adminRows } = await pool.query('SELECT is_admin FROM users WHERE id = $1', [payload.id]);
+    if (!adminRows[0]?.is_admin) return res.status(403).send('Admin access required');
+  } catch {
+    return res.status(401).send('Invalid or expired link');
+  }
+
+  const { rows } = await pool.query(
+    'SELECT receipt_data, receipt_mime, receipt_filename FROM transactions WHERE id = $1',
+    [req.params.id],
+  );
+  const txn = rows[0];
+  if (!txn?.receipt_data) return res.status(404).send('No receipt attached');
+
+  res.set('Content-Type', txn.receipt_mime || 'application/octet-stream');
+  res.set('Content-Disposition', `inline; filename="${txn.receipt_filename || 'receipt'}"`);
+  res.send(Buffer.from(txn.receipt_data, 'base64'));
+});
+
 router.use(requireAuth, requireAdmin);
 
 // --- Transaction approvals ---
@@ -21,7 +46,9 @@ router.use(requireAuth, requireAdmin);
 router.get('/transactions', async (req, res) => {
   const status = req.query.status || 'Pending';
   const { rows } = await pool.query(
-    `SELECT t.*, u.name AS user_name, u.email AS user_email
+    `SELECT t.id, t.user_id, t.type, t.title, t.subtitle, t.amount_ngn, t.status, t.address, t.admin_note,
+            t.asset, t.qty, t.provider_ref, t.created_at, (t.receipt_data IS NOT NULL) AS has_receipt,
+            u.name AS user_name, u.email AS user_email
      FROM transactions t JOIN users u ON u.id = t.user_id
      WHERE t.status = $1
      ORDER BY t.created_at ASC`,

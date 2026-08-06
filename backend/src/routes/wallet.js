@@ -15,18 +15,31 @@ async function getAvailableBalance(userId) {
   return Number(userRows[0].wallet_balance_ngn) + Number(pendingRows[0].pending_debits);
 }
 
+// Receipt bytes are excluded from list queries (they're base64 and can be a few MB
+// each) — callers get a hasReceipt flag and fetch the actual file separately.
+const TXN_LIST_COLUMNS = `
+  id, user_id, type, title, subtitle, amount_ngn, status, address, admin_note,
+  asset, qty, provider_ref, created_at, (receipt_data IS NOT NULL) AS has_receipt
+`;
+
+// 5MB raw, base64-encoded (~1.37x), so cap the encoded string a bit above that.
+const MAX_RECEIPT_BASE64_CHARS = 7_000_000;
+
 router.get('/transactions', requireAuth, async (req, res) => {
   const { rows } = await pool.query(
-    'SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20',
+    `SELECT ${TXN_LIST_COLUMNS} FROM transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20`,
     [req.user.id],
   );
   res.json(rows);
 });
 
 router.post('/transactions', requireAuth, async (req, res) => {
-  const { type, title, subtitle, amountNgn, address, asset, qty } = req.body;
+  const { type, title, subtitle, amountNgn, address, asset, qty, receiptData, receiptMime, receiptFilename } = req.body;
   if (!type || !title || amountNgn == null) {
     return res.status(400).json({ error: 'type, title and amountNgn are required' });
+  }
+  if (receiptData && receiptData.length > MAX_RECEIPT_BASE64_CHARS) {
+    return res.status(400).json({ error: 'Receipt file is too large (max 5MB)' });
   }
 
   if (amountNgn < 0) {
@@ -37,8 +50,14 @@ router.post('/transactions', requireAuth, async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    'INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, address, asset, qty) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-    [req.user.id, type, title, subtitle || null, amountNgn, 'Pending', address || null, asset || null, qty || null],
+    `INSERT INTO transactions
+      (user_id, type, title, subtitle, amount_ngn, status, address, asset, qty, receipt_data, receipt_mime, receipt_filename)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING ${TXN_LIST_COLUMNS}`,
+    [
+      req.user.id, type, title, subtitle || null, amountNgn, 'Pending', address || null, asset || null, qty || null,
+      receiptData || null, receiptMime || null, receiptFilename || null,
+    ],
   );
   res.status(201).json(rows[0]);
 });
