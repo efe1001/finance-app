@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useCurrency } from '../currency/CurrencyContext';
+import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
 
@@ -35,11 +36,11 @@ export default function HomeScreen({
   const { user } = useAuth();
   const { colors, mode, toggleMode } = useTheme();
   const { currency, setCurrency, format } = useCurrency();
+  const { balanceHidden, toggleBalanceHidden } = useBalanceVisibility();
   const styles = getStyles(colors);
   const [ticker, setTicker] = useState<TickerItem[]>([]);
   const [activity, setActivity] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
-  const [balanceHidden, setBalanceHidden] = useState(false);
   const fade = useRef(new Animated.Value(0)).current;
 
   const load = useCallback(async () => {
@@ -95,7 +96,7 @@ export default function HomeScreen({
           <View style={styles.balanceCard}>
             <View style={styles.balanceLabelRow}>
               <Text style={styles.balanceLabel}>AVAILABLE BALANCE</Text>
-              <TouchableOpacity onPress={() => setBalanceHidden(v => !v)} style={styles.eyeBtn} hitSlop={10}>
+              <TouchableOpacity onPress={toggleBalanceHidden} style={styles.eyeBtn} hitSlop={10}>
                 <Text style={styles.eyeGlyph}>{balanceHidden ? '🙈' : '👁'}</Text>
               </TouchableOpacity>
             </View>

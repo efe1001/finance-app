@@ -26,9 +26,11 @@ const TXN_LIST_COLUMNS = `
 const MAX_RECEIPT_BASE64_CHARS = 7_000_000;
 
 router.get('/transactions', requireAuth, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 20, 100);
+  const offset = Number(req.query.offset) || 0;
   const { rows } = await pool.query(
-    `SELECT ${TXN_LIST_COLUMNS} FROM transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20`,
-    [req.user.id],
+    `SELECT ${TXN_LIST_COLUMNS} FROM transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+    [req.user.id, limit, offset],
   );
   res.json(rows);
 });

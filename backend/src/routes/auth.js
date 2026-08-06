@@ -1,10 +1,21 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
+
+// 10 attempts per 15 minutes per IP - slows brute-force guessing without
+// locking out a real user who just fat-fingers their password a few times.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please try again in a few minutes.' },
+});
 
 function issueToken(user) {
   return jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
@@ -24,8 +35,8 @@ function publicUser(user) {
   };
 }
 
-router.post('/register', async (req, res) => {
-  const { name, email, password } = req.body;
+router.post('/register', authLimiter, async (req, res) => {
+  const { name, email, password, referralCode } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'name, email and password are required' });
   }
@@ -38,20 +49,41 @@ router.post('/register', async (req, res) => {
     return res.status(409).json({ error: 'An account with this email already exists' });
   }
 
+  let referrer = null;
+  if (referralCode) {
+    const { rows: refRows } = await pool.query('SELECT id FROM users WHERE referral_code = $1', [referralCode.trim().toUpperCase()]);
+    referrer = refRows[0] || null;
+  }
+
   const passwordHash = await bcrypt.hash(password, 10);
   const { rows } = await pool.query(
-    'INSERT INTO users (name, email, password_hash, wallet_balance_ngn) VALUES ($1, $2, $3, $4) RETURNING *',
-    [name, email, passwordHash, 0],
+    'INSERT INTO users (name, email, password_hash, wallet_balance_ngn, referred_by) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+    [name, email, passwordHash, 0, referrer?.id || null],
   );
 
   let user = rows[0];
   await pool.query("UPDATE users SET referral_code = 'FA' || LPAD(id::text, 6, '0') WHERE id = $1", [user.id]);
   user.referral_code = 'FA' + String(user.id).padStart(6, '0');
 
+  if (referrer) {
+    const { rows: settingsRows } = await pool.query("SELECT value FROM settings WHERE key = 'referral_bonus_ngn'");
+    const bonus = Number(settingsRows[0]?.value || 0);
+    if (bonus > 0) {
+      await pool.query(
+        `INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status) VALUES
+          ($1, 'referral_bonus', 'Referral Bonus', 'For referring a new user', $2, 'Successful'),
+          ($3, 'referral_bonus', 'Referral Bonus', 'For signing up with a referral code', $2, 'Successful')`,
+        [referrer.id, bonus, user.id],
+      );
+      await pool.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE id = ANY($2)', [bonus, [referrer.id, user.id]]);
+      user.wallet_balance_ngn = Number(user.wallet_balance_ngn) + bonus;
+    }
+  }
+
   res.status(201).json({ token: issueToken(user), user: publicUser(user) });
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'email and password are required' });
@@ -103,6 +135,13 @@ router.post('/change-password', requireAuth, async (req, res) => {
 
   const newHash = await bcrypt.hash(newPassword, 10);
   await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, req.user.id]);
+  res.json({ ok: true });
+});
+
+router.post('/fcm-token', requireAuth, async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'token is required' });
+  await pool.query('UPDATE users SET fcm_token = $1 WHERE id = $2', [token, req.user.id]);
   res.json({ ok: true });
 });
 

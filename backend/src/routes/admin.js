@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { sendPush } = require('../firebase');
 
 const router = express.Router();
 
@@ -47,11 +48,13 @@ router.get('/transactions', async (req, res) => {
   const status = req.query.status || 'Pending';
   const { rows } = await pool.query(
     `SELECT t.id, t.user_id, t.type, t.title, t.subtitle, t.amount_ngn, t.status, t.address, t.admin_note,
-            t.asset, t.qty, t.provider_ref, t.created_at, (t.receipt_data IS NOT NULL) AS has_receipt,
-            u.name AS user_name, u.email AS user_email
+            t.asset, t.qty, t.provider_ref, t.created_at, t.admin_id, (t.receipt_data IS NOT NULL) AS has_receipt,
+            u.name AS user_name, u.email AS user_email, a.name AS admin_name
      FROM transactions t JOIN users u ON u.id = t.user_id
+     LEFT JOIN users a ON a.id = t.admin_id
      WHERE t.status = $1
-     ORDER BY t.created_at ASC`,
+     ORDER BY t.created_at DESC
+     LIMIT 100`,
     [status],
   );
   res.json(rows);
@@ -72,7 +75,7 @@ router.post('/transactions/:id/approve', async (req, res) => {
       return res.status(400).json({ error: `Transaction is already ${txn.status}` });
     }
 
-    await client.query('UPDATE transactions SET status = $1 WHERE id = $2', ['Successful', txn.id]);
+    await client.query('UPDATE transactions SET status = $1, admin_id = $2 WHERE id = $3', ['Successful', req.user.id, txn.id]);
     await client.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE id = $2', [
       txn.amount_ngn,
       txn.user_id,
@@ -91,6 +94,9 @@ router.post('/transactions/:id/approve', async (req, res) => {
 
     await client.query('COMMIT');
     res.json({ status: 'Successful' });
+
+    const { rows: userRows } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [txn.user_id]);
+    sendPush(userRows[0]?.fcm_token, 'Transaction approved', `${txn.title} was approved and your balance has been updated.`);
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -102,18 +108,22 @@ router.post('/transactions/:id/approve', async (req, res) => {
 router.post('/transactions/:id/reject', async (req, res) => {
   const { note } = req.body;
   const { rows } = await pool.query(
-    "UPDATE transactions SET status = 'Rejected', admin_note = $1 WHERE id = $2 AND status = 'Pending' RETURNING *",
-    [note || null, req.params.id],
+    "UPDATE transactions SET status = 'Rejected', admin_note = $1, admin_id = $2 WHERE id = $3 AND status = 'Pending' RETURNING *",
+    [note || null, req.user.id, req.params.id],
   );
   if (!rows.length) return res.status(400).json({ error: 'Transaction not found or already processed' });
   res.json({ status: 'Rejected' });
+
+  const { rows: userRows } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [rows[0].user_id]);
+  sendPush(userRows[0]?.fcm_token, 'Transaction rejected', `${rows[0].title} was rejected.${note ? ` Reason: ${note}` : ''}`);
 });
 
 // --- User management ---
 
 router.get('/users', async (req, res) => {
   const { rows } = await pool.query(
-    'SELECT id, name, email, wallet_balance_ngn, is_admin, created_at FROM users ORDER BY created_at DESC',
+    `SELECT id, name, email, wallet_balance_ngn, is_admin, nin, nin_status, created_at
+     FROM users ORDER BY created_at DESC`,
   );
   res.json(rows);
 });
@@ -126,8 +136,8 @@ router.post('/users/:id/adjust-balance', async (req, res) => {
   try {
     await client.query('BEGIN');
     await client.query(
-      'INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, admin_note) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [req.params.id, 'admin_adjustment', amountNgn >= 0 ? 'Admin Credit' : 'Admin Debit', 'Manual balance adjustment', amountNgn, 'Successful', note || null],
+      'INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, admin_note, admin_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [req.params.id, 'admin_adjustment', amountNgn >= 0 ? 'Admin Credit' : 'Admin Debit', 'Manual balance adjustment', amountNgn, 'Successful', note || null, req.user.id],
     );
     const { rows } = await client.query(
       'UPDATE users SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE id = $2 RETURNING wallet_balance_ngn',
@@ -141,6 +151,29 @@ router.post('/users/:id/adjust-balance', async (req, res) => {
   } finally {
     client.release();
   }
+});
+
+// --- NIN / KYC review ---
+
+router.post('/users/:id/nin/approve', async (req, res) => {
+  const { rows } = await pool.query(
+    "UPDATE users SET nin_status = 'verified' WHERE id = $1 AND nin_status = 'pending' RETURNING id, fcm_token",
+    [req.params.id],
+  );
+  if (!rows.length) return res.status(400).json({ error: 'User not found or no pending NIN submission' });
+  res.json({ ninStatus: 'verified' });
+  sendPush(rows[0].fcm_token, 'Identity verified', 'Your NIN has been verified.');
+});
+
+router.post('/users/:id/nin/reject', async (req, res) => {
+  const { note } = req.body;
+  const { rows } = await pool.query(
+    "UPDATE users SET nin_status = 'rejected' WHERE id = $1 AND nin_status = 'pending' RETURNING id, fcm_token",
+    [req.params.id],
+  );
+  if (!rows.length) return res.status(400).json({ error: 'User not found or no pending NIN submission' });
+  res.json({ ninStatus: 'rejected' });
+  sendPush(rows[0].fcm_token, 'Identity verification failed', note || 'Your NIN submission was rejected. Please try again.');
 });
 
 // --- Analytics ---

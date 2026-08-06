@@ -4,6 +4,7 @@ import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useCurrency } from '../currency/CurrencyContext';
+import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
 
@@ -37,20 +38,24 @@ export default function WalletScreen({
 }) {
   const { user } = useAuth();
   const { currency, setCurrency, format } = useCurrency();
+  const { balanceHidden, toggleBalanceHidden } = useBalanceVisibility();
   const styles = getStyles(colors);
   const [tab, setTab] = useState<'holdings' | 'history'>('holdings');
-  const [balanceHidden, setBalanceHidden] = useState(false);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [history, setHistory] = useState<Transaction[]>([]);
+  const [historyPage, setHistoryPage] = useState(0);
+  const [hasMoreHistory, setHasMoreHistory] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const fade = useRef(new Animated.Value(0)).current;
+  const PAGE_SIZE = 20;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [prices, txns, myHoldings] = await Promise.all([
         api.cryptoPrices(ASSETS.map(a => a.id).join(',')).catch(() => ({})),
-        api.transactions().catch(() => []),
+        api.transactions({ limit: PAGE_SIZE, offset: 0 }).catch(() => []),
         api.holdings().catch(() => []),
       ]);
       setHoldings(
@@ -66,10 +71,26 @@ export default function WalletScreen({
         }),
       );
       setHistory(txns);
+      setHistoryPage(0);
+      setHasMoreHistory(txns.length === PAGE_SIZE);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  async function loadMoreHistory() {
+    if (loadingMore || !hasMoreHistory) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = historyPage + 1;
+      const more = await api.transactions({ limit: PAGE_SIZE, offset: nextPage * PAGE_SIZE });
+      setHistory(h => [...h, ...more]);
+      setHistoryPage(nextPage);
+      setHasMoreHistory(more.length === PAGE_SIZE);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     load();
@@ -97,7 +118,7 @@ export default function WalletScreen({
                 <Text style={[styles.currencyChipText, currency === 'NGN' && styles.currencyChipTextOn]}>NGN</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => setBalanceHidden(v => !v)} style={styles.eyeBtn} hitSlop={10}>
+            <TouchableOpacity onPress={toggleBalanceHidden} style={styles.eyeBtn} hitSlop={10}>
               <Text style={styles.eyeGlyph}>{balanceHidden ? '🙈' : '👁'}</Text>
             </TouchableOpacity>
           </View>
@@ -143,18 +164,27 @@ export default function WalletScreen({
               ))
             : history.length === 0
             ? <Text style={styles.empty}>No transactions yet.</Text>
-            : history.map(t => (
-                <View key={t.id} style={styles.holdingRow}>
-                  <View>
-                    <Text style={styles.holdingSymbol}>{t.title}</Text>
-                    {t.subtitle ? <Text style={styles.holdingChange}>{t.subtitle}</Text> : null}
+            : (
+              <>
+                {history.map(t => (
+                  <View key={t.id} style={styles.holdingRow}>
+                    <View>
+                      <Text style={styles.holdingSymbol}>{t.title}</Text>
+                      {t.subtitle ? <Text style={styles.holdingChange}>{t.subtitle}</Text> : null}
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.holdingValue}>₦{Math.abs(t.amount_ngn).toLocaleString()}</Text>
+                      <Text style={styles.holdingPrice}>{t.status}</Text>
+                    </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.holdingValue}>₦{Math.abs(t.amount_ngn).toLocaleString()}</Text>
-                    <Text style={styles.holdingPrice}>{t.status}</Text>
-                  </View>
-                </View>
-              ))}
+                ))}
+                {hasMoreHistory && (
+                  <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMoreHistory} disabled={loadingMore}>
+                    <Text style={styles.loadMoreText}>{loadingMore ? 'Loading…' : 'Load More'}</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
         </Animated.View>
       </ScrollView>
     </View>
@@ -190,5 +220,7 @@ function getStyles(colors: ThemeColors) {
     holdingValue: { color: colors.ink, fontSize: 13, fontWeight: '700' },
     holdingPrice: { color: colors.muted, fontSize: 11, marginTop: 2 },
     empty: { color: colors.muted, fontSize: 12, textAlign: 'center', paddingVertical: spacing.xl },
+    loadMoreBtn: { alignItems: 'center', paddingVertical: spacing.md, marginTop: spacing.xs },
+    loadMoreText: { color: colors.signal, fontSize: 12.5, fontWeight: '700' },
   });
 }

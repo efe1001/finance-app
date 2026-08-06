@@ -20,6 +20,7 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -58,9 +59,21 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
           />
         </View>
 
+        <View style={styles.field}>
+          <Text style={styles.label}>REFERRAL CODE (OPTIONAL)</Text>
+          <TextInput
+            style={styles.input}
+            value={referralCode}
+            onChangeText={setReferralCode}
+            placeholder="e.g. FA000123"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="characters"
+          />
+        </View>
+
         {error && <Text style={styles.error}>{error}</Text>}
 
-        <TouchableOpacity style={[styles.cta, loading && { opacity: 0.6 }]} disabled={loading} onPress={() => register(name, email, password)}>
+        <TouchableOpacity style={[styles.cta, loading && { opacity: 0.6 }]} disabled={loading} onPress={() => register(name, email, password, referralCode)}>
           <Text style={styles.ctaText}>{loading ? 'Creating account…' : 'Create Account'}</Text>
         </TouchableOpacity>
 

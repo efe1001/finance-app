@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useCurrency, CURRENCIES } from '../currency/CurrencyContext';
+import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import ScreenHeader from '../components/ScreenHeader';
 
 type SubScreen =
@@ -74,9 +75,9 @@ function RootSettings({
   const { user, logout } = useAuth();
   const { mode, toggleMode } = useTheme();
   const { currency } = useCurrency();
+  const { balanceHidden, setBalanceHidden } = useBalanceVisibility();
   const styles = getStyles(colors);
   const [biometrics, setBiometrics] = useState(false);
-  const [hideBalance, setHideBalance] = useState(false);
 
   return (
     <View style={styles.screen}>
@@ -112,9 +113,9 @@ function RootSettings({
           />
           <Row
             icon="☺"
-            label="Biometrics"
+            label="Biometrics (coming soon)"
             colors={colors}
-            right={<Switch value={biometrics} onValueChange={setBiometrics} trackColor={{ true: colors.signal, false: colors.line }} thumbColor="#fff" />}
+            right={<Switch value={biometrics} onValueChange={setBiometrics} disabled trackColor={{ true: colors.signal, false: colors.line }} thumbColor="#fff" />}
           />
           <Row
             icon="$"
@@ -131,9 +132,9 @@ function RootSettings({
           <View style={{ borderBottomWidth: 0 }}>
             <Row
               icon="◉"
-              label="Hide Balance by Default"
+              label="Hide Balance"
               colors={colors}
-              right={<Switch value={hideBalance} onValueChange={setHideBalance} trackColor={{ true: colors.signal, false: colors.line }} thumbColor="#fff" />}
+              right={<Switch value={balanceHidden} onValueChange={setBalanceHidden} trackColor={{ true: colors.signal, false: colors.line }} thumbColor="#fff" />}
             />
           </View>
         </View>

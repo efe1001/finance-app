@@ -4,7 +4,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { CurrencyProvider } from './src/currency/CurrencyContext';
+import { BalanceVisibilityProvider } from './src/wallet/BalanceVisibilityContext';
 import { initPushNotifications } from './src/notifications';
+import { api } from './src/api/client';
 
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
@@ -85,7 +87,7 @@ function Root() {
   useEffect(() => {
     if (!user) return;
     initPushNotifications(token => {
-      console.log('FCM token:', token);
+      api.saveFcmToken(token).catch(() => {});
     });
   }, [user]);
 
@@ -102,9 +104,11 @@ function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <CurrencyProvider>
-          <AuthProvider>
-            <Root />
-          </AuthProvider>
+          <BalanceVisibilityProvider>
+            <AuthProvider>
+              <Root />
+            </AuthProvider>
+          </BalanceVisibilityProvider>
         </CurrencyProvider>
       </ThemeProvider>
     </SafeAreaProvider>

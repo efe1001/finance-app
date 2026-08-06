@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import IconBadge from '../components/IconBadge';
 
-type Tab = 'approvals' | 'users' | 'stats' | 'wallets' | 'rates' | 'settings';
+type Tab = 'approvals' | 'users' | 'nin' | 'stats' | 'wallets' | 'rates' | 'settings';
 
 type PendingTxn = {
   id: number;
@@ -14,11 +14,16 @@ type PendingTxn = {
   title: string;
   subtitle: string | null;
   amount_ngn: number;
+  status: string;
   address: string | null;
   has_receipt: boolean;
+  admin_id: number | null;
+  admin_name: string | null;
   user_name: string;
   user_email: string;
 };
+
+const STATUS_FILTERS = ['Pending', 'Successful', 'Rejected'] as const;
 
 type AdminUser = {
   id: number;
@@ -33,6 +38,7 @@ type Overview = { totalUsers: number; totalBalanceNgn: number; pendingApprovals:
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'approvals', label: 'Approvals', icon: 'approvals' },
   { key: 'users', label: 'Users', icon: 'users' },
+  { key: 'nin', label: 'NIN Review', icon: 'approvals' },
   { key: 'stats', label: 'Analytics', icon: 'stats' },
   { key: 'wallets', label: 'Wallets', icon: 'vault' },
   { key: 'rates', label: 'Gift Cards', icon: 'giftcard' },
@@ -112,6 +118,7 @@ export default function AdminDashboardScreen() {
 
       {tab === 'approvals' && <ApprovalsTab colors={colors} onChanged={bump} />}
       {tab === 'users' && <UsersTab colors={colors} onChanged={bump} />}
+      {tab === 'nin' && <NinReviewTab colors={colors} />}
       {tab === 'stats' && <StatsTab colors={colors} />}
       {tab === 'wallets' && <WalletsTab colors={colors} />}
       {tab === 'rates' && <RatesTab colors={colors} />}
@@ -138,6 +145,7 @@ const ASSET_ICON: Record<string, string> = {
 
 function ApprovalsTab({ colors, onChanged }: { colors: ThemeColors; onChanged: () => void }) {
   const styles = getStyles(colors);
+  const [statusFilter, setStatusFilter] = useState<typeof STATUS_FILTERS[number]>('Pending');
   const [items, setItems] = useState<PendingTxn[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -152,11 +160,11 @@ function ApprovalsTab({ colors, onChanged }: { colors: ThemeColors; onChanged: (
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setItems(await api.admin.pendingTransactions());
+      setItems(await api.admin.pendingTransactions(statusFilter));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
     load();
@@ -190,10 +198,19 @@ function ApprovalsTab({ colors, onChanged }: { colors: ThemeColors; onChanged: (
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
+      <View style={styles.statusFilterRow}>
+        {STATUS_FILTERS.map(s => (
+          <TouchableOpacity key={s} style={[styles.statusChip, statusFilter === s && styles.statusChipOn]} onPress={() => setStatusFilter(s)}>
+            <Text style={[styles.statusChipText, statusFilter === s && styles.statusChipTextOn]}>{s}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
       {items.length === 0 && !loading && (
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyGlyph}>✓</Text>
-          <Text style={styles.empty}>All caught up — no pending approvals.</Text>
+          <Text style={styles.empty}>
+            {statusFilter === 'Pending' ? 'All caught up — no pending approvals.' : `No ${statusFilter.toLowerCase()} transactions.`}
+          </Text>
         </View>
       )}
       {items.map(item => {
@@ -227,20 +244,27 @@ function ApprovalsTab({ colors, onChanged }: { colors: ThemeColors; onChanged: (
                       <Text style={styles.receiptLink}>📎 View Receipt</Text>
                     </TouchableOpacity>
                   )}
+                  {item.admin_name && (
+                    <Text style={styles.cardSub}>
+                      {item.status === 'Successful' ? 'Approved' : 'Rejected'} by {item.admin_name}
+                    </Text>
+                  )}
                 </View>
               </View>
               <Text style={[styles.cardAmt, item.amount_ngn < 0 ? { color: colors.ember } : { color: colors.jade }]}>
                 {item.amount_ngn < 0 ? '-' : '+'}₦{Math.abs(item.amount_ngn).toLocaleString()}
               </Text>
             </View>
-            <View style={styles.cardActions}>
-              <TouchableOpacity style={styles.rejectBtn} disabled={busyId === item.id} onPress={() => reject(item.id)}>
-                <Text style={styles.rejectText}>Reject</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.approveBtn} disabled={busyId === item.id} onPress={() => approve(item.id)}>
-                <Text style={styles.approveText}>{busyId === item.id ? '…' : 'Approve'}</Text>
-              </TouchableOpacity>
-            </View>
+            {statusFilter === 'Pending' && (
+              <View style={styles.cardActions}>
+                <TouchableOpacity style={styles.rejectBtn} disabled={busyId === item.id} onPress={() => reject(item.id)}>
+                  <Text style={styles.rejectText}>Reject</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.approveBtn} disabled={busyId === item.id} onPress={() => approve(item.id)}>
+                  <Text style={styles.approveText}>{busyId === item.id ? '…' : 'Approve'}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         );
       })}
@@ -345,6 +369,79 @@ function UsersTab({ colors, onChanged }: { colors: ThemeColors; onChanged: () =>
         </View>
       </Modal>
     </>
+  );
+}
+
+type NinUser = { id: number; name: string; email: string; nin: string | null; nin_status: string };
+
+function NinReviewTab({ colors }: { colors: ThemeColors }) {
+  const styles = getStyles(colors);
+  const [users, setUsers] = useState<NinUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const all: NinUser[] = await api.admin.users();
+      setUsers(all.filter(u => u.nin_status === 'pending'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function approve(id: number) {
+    setBusyId(id);
+    try {
+      await api.admin.approveNin(id);
+      await load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function reject(id: number) {
+    setBusyId(id);
+    try {
+      await api.admin.rejectNin(id);
+      await load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
+      {users.length === 0 && !loading && (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyGlyph}>✓</Text>
+          <Text style={styles.empty}>No pending NIN submissions.</Text>
+        </View>
+      )}
+      {users.map(u => (
+        <View key={u.id} style={styles.card}>
+          <Text style={styles.cardTitle}>{u.name}</Text>
+          <Text style={styles.cardSub}>{u.email}</Text>
+          <Text style={styles.cardAddress}>NIN: {u.nin}</Text>
+          <View style={styles.cardActions}>
+            <TouchableOpacity style={styles.rejectBtn} disabled={busyId === u.id} onPress={() => reject(u.id)}>
+              <Text style={styles.rejectText}>Reject</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.approveBtn} disabled={busyId === u.id} onPress={() => approve(u.id)}>
+              <Text style={styles.approveText}>{busyId === u.id ? '…' : 'Verify'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 
@@ -571,6 +668,9 @@ function LimitsTab({ colors }: { colors: ThemeColors }) {
       { key: 'min_withdrawal_ngn', label: 'Minimum withdrawal (₦)' },
       { key: 'max_withdrawal_ngn', label: 'Maximum withdrawal (₦)' },
     ] },
+    { head: 'REFERRALS', icon: 'users', fields: [
+      { key: 'referral_bonus_ngn', label: 'Bonus per referral, both sides (₦) — 0 disables it' },
+    ] },
   ];
 
   return (
@@ -646,6 +746,11 @@ function getStyles(colors: ThemeColors) {
     cardActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
     autoChip: { backgroundColor: 'rgba(226,163,58,0.16)', borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2 },
     autoChipText: { color: colors.signal, fontSize: 9.5, fontWeight: '700' },
+    statusFilterRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+    statusChip: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+    statusChipOn: { backgroundColor: colors.signal, borderColor: 'transparent' },
+    statusChipText: { color: colors.muted, fontSize: 12, fontWeight: '700' },
+    statusChipTextOn: { color: colors.signalInk },
 
     rejectBtn: { flex: 1, alignItems: 'center', padding: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.ember },
     rejectText: { color: colors.ember, fontWeight: '700', fontSize: 12.5 },

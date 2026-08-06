@@ -27,10 +27,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  register: (name: string, email: string, password: string) =>
+  register: (name: string, email: string, password: string, referralCode?: string) =>
     request<{ token: string; user: any }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, referralCode: referralCode || undefined }),
     }),
   login: (email: string, password: string) =>
     request<{ token: string; user: any }>('/auth/login', {
@@ -46,8 +46,10 @@ export const api = {
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
   submitNin: (nin: string) => request<any>('/auth/nin', { method: 'POST', body: JSON.stringify({ nin }) }),
+  saveFcmToken: (token: string) => request<{ ok: true }>('/auth/fcm-token', { method: 'POST', body: JSON.stringify({ token }) }),
 
-  transactions: () => request<any[]>('/wallet/transactions'),
+  transactions: (opts?: { limit?: number; offset?: number }) =>
+    request<any[]>(`/wallet/transactions?limit=${opts?.limit ?? 20}&offset=${opts?.offset ?? 0}`),
   addTransaction: (body: {
     type: string;
     title: string;
@@ -110,6 +112,7 @@ export const api = {
     request<any>('/giftcards/submit', { method: 'POST', body: JSON.stringify(body) }),
 
   p2pListings: () => request<any[]>('/p2p/listings'),
+  myP2pListings: () => request<any[]>('/p2p/listings/mine'),
   createP2pListing: (body: {
     side: string;
     asset: string;
@@ -117,6 +120,10 @@ export const api = {
     rateNgn: number;
     paymentMethod?: string;
   }) => request<any>('/p2p/listings', { method: 'POST', body: JSON.stringify(body) }),
+  claimP2pListing: (id: number) => request<any>(`/p2p/listings/${id}/claim`, { method: 'POST' }),
+  markP2pPaid: (id: number) => request<any>(`/p2p/listings/${id}/mark-paid`, { method: 'POST' }),
+  confirmP2pTrade: (id: number) => request<any>(`/p2p/listings/${id}/confirm`, { method: 'POST' }),
+  cancelP2pListing: (id: number) => request<any>(`/p2p/listings/${id}/cancel`, { method: 'POST' }),
 
   admin: {
     pendingTransactions: (status = 'Pending') => request<any[]>(`/admin/transactions?status=${status}`),
@@ -144,6 +151,9 @@ export const api = {
       }),
     deleteGiftCardRate: (brand: string) =>
       request<{ ok: true }>(`/admin/giftcard-rates/${encodeURIComponent(brand)}`, { method: 'DELETE' }),
+    approveNin: (userId: number) => request<any>(`/admin/users/${userId}/nin/approve`, { method: 'POST' }),
+    rejectNin: (userId: number, note?: string) =>
+      request<any>(`/admin/users/${userId}/nin/reject`, { method: 'POST', body: JSON.stringify({ note }) }),
     receiptFileUrl: (id: number) => `${BASE_URL}/admin/transactions/${id}/receipt-file?token=${encodeURIComponent(authToken ?? '')}`,
   },
 };

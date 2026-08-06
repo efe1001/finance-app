@@ -51,7 +51,8 @@ async function init() {
       ('min_deposit_ngn', '1000'),
       ('max_deposit_ngn', '5000000'),
       ('min_withdrawal_ngn', '1000'),
-      ('max_withdrawal_ngn', '2000000')
+      ('max_withdrawal_ngn', '2000000'),
+      ('referral_bonus_ngn', '0')
     ON CONFLICT (key) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS platform_wallets (
@@ -108,6 +109,13 @@ async function init() {
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt_data TEXT;
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt_mime TEXT;
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt_filename TEXT;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS admin_id INTEGER REFERENCES users(id);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER REFERENCES users(id);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
+    ALTER TABLE p2p_listings ADD COLUMN IF NOT EXISTS buyer_id INTEGER REFERENCES users(id);
+    ALTER TABLE p2p_listings ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMP;
+    ALTER TABLE p2p_listings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;
+    ALTER TABLE p2p_listings ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP;
 
     UPDATE users SET referral_code = 'FA' || LPAD(id::text, 6, '0') WHERE referral_code IS NULL;
   `);
