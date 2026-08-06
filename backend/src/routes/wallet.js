@@ -4,6 +4,17 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Balance minus any debits already sitting in the approval queue, so a user can't
+// stack multiple pending orders that together exceed what they actually have.
+async function getAvailableBalance(userId) {
+  const { rows: userRows } = await pool.query('SELECT wallet_balance_ngn FROM users WHERE id = $1', [userId]);
+  const { rows: pendingRows } = await pool.query(
+    "SELECT COALESCE(SUM(amount_ngn), 0) AS pending_debits FROM transactions WHERE user_id = $1 AND status = 'Pending' AND amount_ngn < 0",
+    [userId],
+  );
+  return Number(userRows[0].wallet_balance_ngn) + Number(pendingRows[0].pending_debits);
+}
+
 router.get('/transactions', requireAuth, async (req, res) => {
   const { rows } = await pool.query(
     'SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20',
@@ -17,6 +28,14 @@ router.post('/transactions', requireAuth, async (req, res) => {
   if (!type || !title || amountNgn == null) {
     return res.status(400).json({ error: 'type, title and amountNgn are required' });
   }
+
+  if (amountNgn < 0) {
+    const available = await getAvailableBalance(req.user.id);
+    if (available < Math.abs(amountNgn)) {
+      return res.status(400).json({ error: 'Insufficient balance' });
+    }
+  }
+
   const { rows } = await pool.query(
     'INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, address, asset, qty) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
     [req.user.id, type, title, subtitle || null, amountNgn, 'Pending', address || null, asset || null, qty || null],
@@ -71,8 +90,8 @@ router.post('/withdraw', requireAuth, async (req, res) => {
     });
   }
 
-  const { rows: userRows } = await pool.query('SELECT wallet_balance_ngn FROM users WHERE id = $1', [req.user.id]);
-  if (Number(userRows[0].wallet_balance_ngn) < amountNgn) {
+  const available = await getAvailableBalance(req.user.id);
+  if (available < amountNgn) {
     return res.status(400).json({ error: 'Insufficient balance' });
   }
 

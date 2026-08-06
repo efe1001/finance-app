@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Clipboard } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -27,6 +27,7 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
   const [amountUsd, setAmountUsd] = useState('');
   const [myAddress, setMyAddress] = useState('');
   const [status, setStatus] = useState<string | null>(null);
+  const [addressCopied, setAddressCopied] = useState(false);
 
   // --- Quidax per-user deposit addresses: built and tested, but on hold until the
   // Quidax account is approved for business/merchant access (sub-accounts API is
@@ -73,7 +74,15 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
 
   const receiveNgn = (parseFloat(amountUsd || '0') * priceNgn).toFixed(2);
   const qty = priceUsd ? parseFloat(amountUsd || '0') / priceUsd : 0;
-  const canSubmit = side === 'buy' ? !!amountUsd && !!myAddress : !!amountUsd;
+  const insufficientBalance = side === 'buy' && !!amountUsd && Number(receiveNgn) > (user?.walletBalanceNgn ?? 0);
+  const canSubmit = side === 'buy' ? !!amountUsd && !!myAddress && !insufficientBalance : !!amountUsd;
+
+  function copyAddress() {
+    if (!platformAddress) return;
+    Clipboard.setString(platformAddress);
+    setAddressCopied(true);
+    setTimeout(() => setAddressCopied(false), 1800);
+  }
 
   async function submitOrder() {
     if (!user || !canSubmit) return;
@@ -144,16 +153,30 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
         </View>
 
         {side === 'buy' ? (
-          <View style={styles.field}>
-            <Text style={styles.flabel}>YOUR RECEIVING {asset.symbol} ADDRESS</Text>
-            <TextInput style={styles.input} value={myAddress} onChangeText={setMyAddress} placeholder={`Paste your ${asset.symbol} address`} placeholderTextColor={colors.muted} autoCapitalize="none" />
-          </View>
+          <>
+            <View style={styles.field}>
+              <Text style={styles.flabel}>YOUR RECEIVING {asset.symbol} ADDRESS</Text>
+              <TextInput style={styles.input} value={myAddress} onChangeText={setMyAddress} placeholder={`Paste your ${asset.symbol} address`} placeholderTextColor={colors.muted} autoCapitalize="none" />
+            </View>
+            {insufficientBalance && (
+              <Text style={styles.insufficientText}>
+                Insufficient balance — you have ₦{(user?.walletBalanceNgn ?? 0).toLocaleString()}, this order needs ₦{Number(receiveNgn).toLocaleString()}.
+              </Text>
+            )}
+          </>
         ) : (
           <View style={styles.field}>
             <Text style={styles.flabel}>SEND {asset.symbol} TO THIS ADDRESS</Text>
-            <Text style={styles.addressText} selectable>
-              {platformAddress || 'Not configured yet — contact support'}
-            </Text>
+            <View style={styles.addressRow}>
+              <Text style={styles.addressText} selectable numberOfLines={1} ellipsizeMode="middle">
+                {platformAddress || 'Not configured yet — contact support'}
+              </Text>
+              {!!platformAddress && (
+                <TouchableOpacity style={styles.copyBtn} onPress={copyAddress}>
+                  <Text style={styles.copyBtnText}>{addressCopied ? '✓ Copied' : 'Copy'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <Text style={styles.fsub}>After sending, submit below so an admin can confirm and pay you out.</Text>
           </View>
         )}
@@ -191,8 +214,12 @@ function getStyles(colors: ThemeColors) {
     fval: { color: colors.ink, fontSize: 20, fontWeight: '700', marginTop: spacing.xs },
     fsub: { color: colors.muted, fontSize: 10.5, marginTop: spacing.sm, lineHeight: 15 },
     input: { color: colors.ink, fontSize: 20, fontWeight: '700', marginTop: spacing.xs, padding: 0 },
-    addressText: { color: colors.signal, fontSize: 14, fontWeight: '700', marginTop: spacing.xs },
+    addressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
+    addressText: { flex: 1, color: colors.signal, fontSize: 14, fontWeight: '700' },
+    copyBtn: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+    copyBtnText: { color: colors.ink, fontSize: 11.5, fontWeight: '700' },
     status: { color: colors.jade, fontSize: 12, marginTop: spacing.sm, marginBottom: spacing.sm },
+    insufficientText: { color: colors.ember, fontSize: 12, marginTop: -spacing.xs, marginBottom: spacing.sm },
     cta: { backgroundColor: colors.signal, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center', marginTop: spacing.md },
     ctaText: { color: colors.signalInk, fontWeight: '700', fontSize: 14 },
     trustNote: { color: colors.muted, fontSize: 10.5, textAlign: 'center', marginTop: spacing.md, lineHeight: 16 },

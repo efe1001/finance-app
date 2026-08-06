@@ -4,6 +4,7 @@ import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
+import { useCurrency, CURRENCIES } from '../currency/CurrencyContext';
 import ScreenHeader from '../components/ScreenHeader';
 
 type SubScreen =
@@ -14,7 +15,8 @@ type SubScreen =
   | 'referrals'
   | 'reports'
   | 'legal'
-  | 'support';
+  | 'support'
+  | 'currency';
 
 function Row({
   icon,
@@ -55,6 +57,7 @@ export default function SettingsScreen({ onBack, colors }: { onBack: () => void;
   if (sub === 'reports') return <ReportsScreen onBack={() => setSub('root')} colors={colors} />;
   if (sub === 'legal') return <LegalScreen onBack={() => setSub('root')} colors={colors} />;
   if (sub === 'support') return <SupportScreen onBack={() => setSub('root')} colors={colors} />;
+  if (sub === 'currency') return <CurrencyScreen onBack={() => setSub('root')} colors={colors} />;
 
   return <RootSettings onBack={onBack} colors={colors} onGoTo={setSub} />;
 }
@@ -70,6 +73,7 @@ function RootSettings({
 }) {
   const { user, logout } = useAuth();
   const { mode, toggleMode } = useTheme();
+  const { currency } = useCurrency();
   const styles = getStyles(colors);
   const [biometrics, setBiometrics] = useState(false);
   const [hideBalance, setHideBalance] = useState(false);
@@ -111,6 +115,18 @@ function RootSettings({
             label="Biometrics"
             colors={colors}
             right={<Switch value={biometrics} onValueChange={setBiometrics} trackColor={{ true: colors.signal, false: colors.line }} thumbColor="#fff" />}
+          />
+          <Row
+            icon="$"
+            label="Currency"
+            colors={colors}
+            onPress={() => onGoTo('currency')}
+            right={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                <Text style={styles.rowValue}>{currency}</Text>
+                <Text style={styles.chevron}>›</Text>
+              </View>
+            }
           />
           <View style={{ borderBottomWidth: 0 }}>
             <Row
@@ -275,6 +291,36 @@ function NinScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors
   );
 }
 
+function CurrencyScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors }) {
+  const { currency, setCurrency } = useCurrency();
+  const styles = getStyles(colors);
+
+  return (
+    <View style={styles.screen}>
+      <ScreenHeader title="Currency" onBack={onBack} colors={colors} />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        <Text style={styles.modalHint}>
+          Choose how prices are displayed across the app. Your NGN wallet balance itself never changes — this only
+          affects how it's shown.
+        </Text>
+        <View style={styles.card}>
+          {CURRENCIES.map((c, idx) => (
+            <View key={c.code} style={idx === CURRENCIES.length - 1 ? { borderBottomWidth: 0 } : undefined}>
+              <Row
+                icon={c.symbol}
+                label={`${c.code} — ${c.label}`}
+                colors={colors}
+                onPress={() => setCurrency(c.code)}
+                right={currency === c.code ? <Text style={styles.currencyCheck}>✓</Text> : null}
+              />
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
 function ReferralsScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors }) {
   const { user } = useAuth();
   const styles = getStyles(colors);
@@ -397,6 +443,8 @@ function getStyles(colors: ThemeColors) {
     rowIconGlyph: { color: colors.ink, fontSize: 15 },
     rowLabel: { color: colors.ink, fontSize: 14, fontWeight: '600' },
     chevron: { color: colors.muted, fontSize: 18 },
+    rowValue: { color: colors.muted, fontSize: 13, fontWeight: '600' },
+    currencyCheck: { color: colors.jade, fontSize: 16, fontWeight: '700' },
     version: { color: colors.muted, fontSize: 11, textAlign: 'center', marginTop: spacing.sm },
     field: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.sm },
     flabel: { color: colors.muted, fontSize: 10, letterSpacing: 0.5 },

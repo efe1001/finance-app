@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Modal, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Modal, Alert, Clipboard } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -140,6 +140,13 @@ function ApprovalsTab({ colors, onChanged }: { colors: ThemeColors; onChanged: (
   const [items, setItems] = useState<PendingTxn[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  function copyAddress(id: number, address: string) {
+    Clipboard.setString(address);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(c => (c === id ? null : c)), 1800);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -206,7 +213,14 @@ function ApprovalsTab({ colors, onChanged }: { colors: ThemeColors; onChanged: (
                   </View>
                   <Text style={styles.cardSub}>{item.user_name} · {item.user_email}</Text>
                   {item.subtitle ? <Text style={styles.cardSub}>{item.subtitle}</Text> : null}
-                  {item.address ? <Text style={styles.cardAddress}>{item.address}</Text> : null}
+                  {item.address ? (
+                    <View style={styles.addressRow}>
+                      <Text style={styles.cardAddress} numberOfLines={1} ellipsizeMode="middle">{item.address}</Text>
+                      <TouchableOpacity style={styles.copyBtn} onPress={() => copyAddress(item.id, item.address!)}>
+                        <Text style={styles.copyBtnText}>{copiedId === item.id ? '✓' : 'Copy'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
                 </View>
               </View>
               <Text style={[styles.cardAmt, item.amount_ngn < 0 ? { color: colors.ember } : { color: colors.jade }]}>
@@ -617,7 +631,10 @@ function getStyles(colors: ThemeColors) {
     titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
     cardTitle: { color: colors.ink, fontSize: 14, fontWeight: '700' },
     cardSub: { color: colors.muted, fontSize: 11.5, marginTop: 2 },
-    cardAddress: { color: colors.signal, fontSize: 11, marginTop: 4, fontFamily: 'monospace' },
+    cardAddress: { flex: 1, color: colors.signal, fontSize: 11, fontFamily: 'monospace' },
+    addressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 4 },
+    copyBtn: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2 },
+    copyBtnText: { color: colors.ink, fontSize: 10.5, fontWeight: '700' },
     cardAmt: { color: colors.ink, fontSize: 14, fontWeight: '700' },
     cardActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
     autoChip: { backgroundColor: 'rgba(226,163,58,0.16)', borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2 },
