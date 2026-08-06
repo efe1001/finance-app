@@ -61,7 +61,8 @@ async function init() {
     );
 
     INSERT INTO platform_wallets (asset, address) VALUES
-      ('BTC', ''), ('ETH', ''), ('USDT', '')
+      ('BTC', ''), ('ETH', ''), ('USDT', ''),
+      ('USDC', ''), ('BNB', ''), ('SOL', ''), ('XRP', ''), ('DOGE', '')
     ON CONFLICT (asset) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS holdings (

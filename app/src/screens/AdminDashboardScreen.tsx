@@ -124,7 +124,16 @@ function typeIcon(type: string) {
   return 'swap';
 }
 
-const ASSET_ICON: Record<string, string> = { BTC: 'bitcoin', ETH: 'ethereum', USDT: 'tether' };
+const ASSET_ICON: Record<string, string> = {
+  BTC: 'bitcoin',
+  ETH: 'ethereum',
+  USDT: 'tether',
+  USDC: 'usd-coin',
+  BNB: 'binancecoin',
+  SOL: 'solana',
+  XRP: 'ripple',
+  DOGE: 'dogecoin',
+};
 
 function ApprovalsTab({ colors, onChanged }: { colors: ThemeColors; onChanged: () => void }) {
   const styles = getStyles(colors);
@@ -383,8 +392,7 @@ function WalletsTab({ colors }: { colors: ThemeColors }) {
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
       <Text style={styles.modalHint}>
-        Users now get their own auto-generated deposit address via Quidax when selling. These platform addresses are a manual
-        fallback and reserve — keep them accurate.
+        Users sending crypto to sell see this address. Keep these accurate — funds sent to the wrong address can't be recovered.
       </Text>
       {wallets.map(w => (
         <View key={w.asset} style={styles.card}>

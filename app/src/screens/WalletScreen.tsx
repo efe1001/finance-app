@@ -14,6 +14,11 @@ const ASSETS = [
   { symbol: 'BTC', id: 'bitcoin', icon: 'bitcoin' },
   { symbol: 'ETH', id: 'ethereum', icon: 'ethereum' },
   { symbol: 'USDT', id: 'tether', icon: 'tether' },
+  { symbol: 'USDC', id: 'usd-coin', icon: 'usd-coin' },
+  { symbol: 'BNB', id: 'binancecoin', icon: 'binancecoin' },
+  { symbol: 'SOL', id: 'solana', icon: 'solana' },
+  { symbol: 'XRP', id: 'ripple', icon: 'ripple' },
+  { symbol: 'DOGE', id: 'dogecoin', icon: 'dogecoin' },
 ];
 
 const ACTIONS: { key: ScreenKey; label: string; icon: string }[] = [

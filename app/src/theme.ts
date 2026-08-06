@@ -73,4 +73,9 @@ export const badgeColors = {
   admin_adjustment: '#6366F1',
   deposit: '#3B82F6',
   withdrawal: '#F97316',
+  'usd-coin': '#2775CA',
+  binancecoin: '#F3BA2F',
+  solana: '#9945FF',
+  ripple: '#346AA9',
+  dogecoin: '#C2A633',
 };

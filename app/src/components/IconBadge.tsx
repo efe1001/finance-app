@@ -42,6 +42,11 @@ const GLYPHS: Record<string, string> = {
   admin_adjustment: '⇄',
   deposit: '+',
   withdrawal: '↗',
+  'usd-coin': '$',
+  binancecoin: 'B',
+  solana: '◎',
+  ripple: 'X',
+  dogecoin: 'Ð',
 };
 
 export default function IconBadge({
