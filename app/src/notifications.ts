@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import {
   getMessaging,
   requestPermission,
@@ -18,7 +19,12 @@ export async function initPushNotifications(onToken: (token: string) => void) {
   const token = await getToken(messaging);
   onToken(token);
 
+  // Android/iOS only show a system-tray notification when the app is backgrounded
+  // or closed — while it's open in the foreground, Firebase just delivers the
+  // message to this handler silently, so without this the user would see nothing.
   return onMessage(messaging, async remoteMessage => {
-    console.log('Push received in foreground:', remoteMessage);
+    const title = remoteMessage.notification?.title ?? 'Finance App';
+    const body = remoteMessage.notification?.body ?? '';
+    Alert.alert(title, body);
   });
 }

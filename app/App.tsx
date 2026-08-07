@@ -13,6 +13,7 @@ import { checkForUpdate, UpdateInfo } from './src/updateCheck';
 import { api } from './src/api/client';
 import LockScreen from './src/screens/LockScreen';
 import UpdateModal from './src/components/UpdateModal';
+import NotificationPromptModal from './src/components/NotificationPromptModal';
 
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
@@ -88,8 +89,14 @@ function MainShell() {
   );
 }
 
+function requestPush() {
+  return initPushNotifications(token => {
+    api.saveFcmToken(token).catch(() => {});
+  });
+}
+
 function Root() {
-  const { user } = useAuth();
+  const { user, justRegistered, clearJustRegistered } = useAuth();
   const { colors, mode } = useTheme();
   const { enabled, locked } = useAppLock();
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
@@ -101,11 +108,19 @@ function Root() {
   useEffect(() => {
     if (!user) return;
     identifyCrashUser(user.id);
-    initPushNotifications(token => {
-      api.saveFcmToken(token).catch(() => {});
-    });
     checkForUpdate().then(setUpdate);
+    // Returning users get the quiet auto-request they've always had; a brand new
+    // account gets the friendly prompt below instead. This must only evaluate
+    // justRegistered at the moment `user` changes (login/register), not every
+    // time it later flips to false when the prompt is dismissed/actioned.
+    if (!justRegistered) requestPush();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  function enableNotifications() {
+    requestPush();
+    clearJustRegistered();
+  }
 
   return (
     <>
@@ -120,6 +135,14 @@ function Root() {
         <MainShell />
       )}
       <UpdateModal update={update} onDismiss={() => setUpdate(null)} colors={colors} />
+      {user && (
+        <NotificationPromptModal
+          visible={justRegistered}
+          onEnable={enableNotifications}
+          onDismiss={clearJustRegistered}
+          colors={colors}
+        />
+      )}
     </>
   );
 }

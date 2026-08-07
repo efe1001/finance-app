@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { sendPush } = require('../firebase');
 
 const router = express.Router();
 
@@ -71,13 +72,14 @@ router.get('/callback', async (req, res) => {
     }
 
     const client = await pool.connect();
+    let pending;
     try {
       await client.query('BEGIN');
       const { rows } = await client.query(
         "SELECT * FROM transactions WHERE provider_ref = $1 AND status = 'Pending' FOR UPDATE",
         [tx_ref],
       );
-      const pending = rows[0];
+      pending = rows[0];
       if (!pending) {
         await client.query('ROLLBACK');
         return res.send(htmlPage('Already processed', 'This payment was already confirmed. You can close this window.'));
@@ -99,6 +101,9 @@ router.get('/callback', async (req, res) => {
     } finally {
       client.release();
     }
+
+    const { rows: userRows } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [pending.user_id]);
+    sendPush(userRows[0]?.fcm_token, 'Wallet funded', `₦${Number(pending.amount_ngn).toLocaleString()} has been added to your wallet.`);
 
     res.send(htmlPage('Payment successful', 'Your wallet has been credited. You can close this window and return to the app.'));
   } catch (err) {

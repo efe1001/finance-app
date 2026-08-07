@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { sendPush } = require('../firebase');
 
 const router = express.Router();
 
@@ -83,6 +84,12 @@ router.post('/register', authLimiter, async (req, res) => {
       );
       await pool.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE id = ANY($2)', [bonus, [referrer.id, user.id]]);
       user.wallet_balance_ngn = Number(user.wallet_balance_ngn) + bonus;
+
+      // The new user doesn't have an FCM token registered yet at this point in the
+      // flow (that happens after their first successful login), so only the
+      // already-registered referrer can actually receive a push here.
+      const { rows: referrerRows } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [referrer.id]);
+      sendPush(referrerRows[0]?.fcm_token, 'Referral bonus earned', `₦${bonus.toLocaleString()} was added to your wallet for referring a new user.`);
     }
   }
 

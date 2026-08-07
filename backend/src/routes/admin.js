@@ -145,6 +145,10 @@ router.post('/users/:id/adjust-balance', async (req, res) => {
     );
     await client.query('COMMIT');
     res.json({ walletBalanceNgn: Number(rows[0].wallet_balance_ngn) });
+
+    const { rows: userRows } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [req.params.id]);
+    const verb = amountNgn >= 0 ? 'credited to' : 'debited from';
+    sendPush(userRows[0]?.fcm_token, 'Balance adjusted', `₦${Math.abs(amountNgn).toLocaleString()} was ${verb} your wallet by an admin.`);
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

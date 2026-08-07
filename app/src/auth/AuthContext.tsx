@@ -21,6 +21,8 @@ type AuthContextValue = {
   user: User | null;
   loading: boolean;
   error: string | null;
+  justRegistered: boolean;
+  clearJustRegistered: () => void;
   login: (email: string, password: string) => Promise<User>;
   register: (name: string, email: string, password: string, phone: string, referralCode?: string, country?: string) => Promise<void>;
   logout: () => void;
@@ -33,6 +35,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Distinguishes "just created an account" from "logged into an existing one" so
+  // Root() can show the friendly notification-permission prompt only on
+  // registration, and fall back to the quiet auto-request for returning users.
+  const [justRegistered, setJustRegistered] = useState(false);
 
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
@@ -41,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await api.login(email, password);
       setAuthToken(res.token);
       setUser(res.user);
+      setJustRegistered(false);
       return res.user as User;
     } catch (e: any) {
       setError(e.message);
@@ -57,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await api.register(name, email, password, phone, referralCode, country);
       setAuthToken(res.token);
       setUser(res.user);
+      setJustRegistered(true);
     } catch (e: any) {
       setError(e.message);
       throw e;
@@ -68,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     setAuthToken(null);
     setUser(null);
+    setJustRegistered(false);
   }, []);
 
   const refreshUser = useCallback(async () => {
@@ -75,8 +84,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(fresh);
   }, []);
 
+  const clearJustRegistered = useCallback(() => setJustRegistered(false), []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, error, justRegistered, clearJustRegistered, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
