@@ -5,6 +5,8 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useCurrency } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
+import { useRefresh } from '../data/RefreshContext';
+import { buildTxnReceipt } from '../utils/transactionReceipt';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
@@ -62,6 +64,7 @@ export default function WalletScreen({
   const { user } = useAuth();
   const { currency, setCurrency, format, formatNgn } = useCurrency();
   const { balanceHidden, toggleBalanceHidden } = useBalanceVisibility();
+  const { version } = useRefresh();
   const styles = getStyles(colors);
   const [tab, setTab] = useState<'holdings' | 'history'>('holdings');
   const [historyFilter, setHistoryFilter] = useState('all');
@@ -77,20 +80,7 @@ export default function WalletScreen({
   const PAGE_SIZE = 20;
 
   function openReceipt(t: Transaction) {
-    const rows = [
-      { label: 'Date', value: t.created_at ? new Date(t.created_at).toLocaleString() : '—' },
-      { label: 'Amount', value: formatNgn(Math.abs(t.amount_ngn)) },
-    ];
-    if (t.subtitle) rows.push({ label: 'Details', value: t.subtitle });
-    if (t.asset) rows.push({ label: 'Asset', value: `${t.qty ?? ''} ${t.asset}`.trim() });
-    if (t.address) rows.push({ label: 'Reference / Address', value: t.address });
-    rows.push({ label: 'Reference ID', value: `#${t.id}` });
-    setTxnReceipt({
-      heading: t.title,
-      status: t.status,
-      rows,
-      footerNote: t.amount_ngn < 0 ? 'Money out of your wallet.' : 'Money into your wallet.',
-    });
+    setTxnReceipt(buildTxnReceipt(t, formatNgn));
   }
 
   const load = useCallback(async () => {
@@ -140,7 +130,8 @@ export default function WalletScreen({
   useEffect(() => {
     load();
     Animated.timing(fade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
-  }, [load, fade]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, fade, version]);
 
   const balanceText = balanceHidden ? '••••••' : formatNgn(user?.walletBalanceNgn ?? 0);
   const filteredHistory = historyFilter === 'all' ? history : history.filter(t => t.type === historyFilter);
@@ -205,16 +196,16 @@ export default function WalletScreen({
                 <View key={h.symbol} style={styles.holdingRow}>
                   <View style={styles.holdingLeft}>
                     <IconBadge name={h.icon} size={40} />
-                    <View>
-                      <Text style={styles.holdingSymbol}>{h.symbol}</Text>
-                      <Text style={[styles.holdingChange, h.changePct >= 0 ? { color: colors.jade } : { color: colors.ember }]}>
+                    <View style={styles.holdingTextWrap}>
+                      <Text style={styles.holdingSymbol} numberOfLines={1}>{h.symbol}</Text>
+                      <Text style={[styles.holdingChange, h.changePct >= 0 ? { color: colors.jade } : { color: colors.ember }]} numberOfLines={1}>
                         {h.changePct >= 0 ? '▲' : '▼'} {Math.abs(h.changePct).toFixed(2)}%
                       </Text>
                     </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.holdingValue}>{format(h.qty * h.usd)}</Text>
-                    <Text style={styles.holdingPrice}>{h.qty.toFixed(6)} {h.symbol}</Text>
+                  <View style={styles.holdingRight}>
+                    <Text style={styles.holdingValue} numberOfLines={1}>{format(h.qty * h.usd)}</Text>
+                    <Text style={styles.holdingPrice} numberOfLines={1}>{h.qty.toFixed(6)} {h.symbol}</Text>
                   </View>
                 </View>
               ))
@@ -232,13 +223,13 @@ export default function WalletScreen({
                 ) : (
                   filteredHistory.map(t => (
                     <TouchableOpacity key={t.id} style={styles.holdingRow} onPress={() => openReceipt(t)}>
-                      <View>
-                        <Text style={styles.holdingSymbol}>{t.title}</Text>
-                        {t.subtitle ? <Text style={styles.holdingChange}>{t.subtitle}</Text> : null}
+                      <View style={styles.holdingTextWrap}>
+                        <Text style={styles.holdingSymbol} numberOfLines={1} ellipsizeMode="tail">{t.title}</Text>
+                        {t.subtitle ? <Text style={styles.holdingChange} numberOfLines={1} ellipsizeMode="tail">{t.subtitle}</Text> : null}
                       </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.holdingValue}>{formatNgn(Math.abs(t.amount_ngn))}</Text>
-                        <Text style={styles.holdingPrice}>{t.status}</Text>
+                      <View style={styles.holdingRight}>
+                        <Text style={styles.holdingValue} numberOfLines={1}>{formatNgn(Math.abs(t.amount_ngn))}</Text>
+                        <Text style={styles.holdingPrice} numberOfLines={1}>{t.status}</Text>
                       </View>
                     </TouchableOpacity>
                   ))
@@ -290,9 +281,11 @@ function getStyles(colors: ThemeColors) {
     tabText: { color: colors.muted, fontSize: 12, fontWeight: '700' },
     tabTextOn: { color: colors.signalInk },
     holdingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
-    holdingLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    holdingLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginRight: spacing.sm },
+    holdingTextWrap: { flex: 1 },
     holdingSymbol: { color: colors.ink, fontSize: 14, fontWeight: '700' },
     holdingChange: { fontSize: 11, marginTop: 2, color: colors.muted },
+    holdingRight: { flexShrink: 0, alignItems: 'flex-end' },
     holdingValue: { color: colors.ink, fontSize: 13, fontWeight: '700' },
     holdingPrice: { color: colors.muted, fontSize: 11, marginTop: 2 },
     empty: { color: colors.muted, fontSize: 12, textAlign: 'center', paddingVertical: spacing.xl },

@@ -6,11 +6,14 @@ import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useCurrency } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
+import { useRefresh } from '../data/RefreshContext';
+import { buildTxnReceipt, TxnLike } from '../utils/transactionReceipt';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
+import ReceiptModal, { Receipt } from '../components/ReceiptModal';
 
 type TickerItem = { symbol: string; id: string; usd: number; changePct: number };
-type Transaction = { id: number; title: string; subtitle: string | null; amount_ngn: number; status: string };
+type Transaction = TxnLike;
 
 const TICKER_IDS = [
   { symbol: 'BTC', id: 'bitcoin' },
@@ -37,12 +40,14 @@ export default function HomeScreen({
   const { colors, mode, toggleMode } = useTheme();
   const { currency, setCurrency, format, formatNgn } = useCurrency();
   const { balanceHidden, toggleBalanceHidden } = useBalanceVisibility();
+  const { version } = useRefresh();
   const styles = getStyles(colors);
   const [ticker, setTicker] = useState<TickerItem[]>([]);
   const [activity, setActivity] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [activityReceipt, setActivityReceipt] = useState<Receipt | null>(null);
   const fade = useRef(new Animated.Value(0)).current;
 
   const load = useCallback(async () => {
@@ -72,7 +77,8 @@ export default function HomeScreen({
   useEffect(() => {
     load();
     Animated.timing(fade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
-  }, [load, fade]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, fade, version]);
 
   const balanceText = balanceHidden ? '••••••' : formatNgn(user?.walletBalanceNgn ?? 0);
 
@@ -173,26 +179,30 @@ export default function HomeScreen({
             <Text style={styles.empty}>No activity yet — your transactions will show up here.</Text>
           )}
           {activity.map((item, idx) => (
-            <View key={item.id} style={[styles.activityRow, idx === activity.length - 1 && { borderBottomWidth: 0 }]}>
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.activityRow, idx === activity.length - 1 && { borderBottomWidth: 0 }]}
+              onPress={() => setActivityReceipt(buildTxnReceipt(item, formatNgn))}>
               <View style={styles.activityLeft}>
                 <View style={styles.activityDot} />
-                <View>
-                  <Text style={styles.activityTitle}>{item.title}</Text>
-                  {item.subtitle ? <Text style={styles.activitySub}>{item.subtitle}</Text> : null}
+                <View style={styles.activityTextWrap}>
+                  <Text style={styles.activityTitle} numberOfLines={1} ellipsizeMode="tail">{item.title}</Text>
+                  {item.subtitle ? <Text style={styles.activitySub} numberOfLines={1} ellipsizeMode="tail">{item.subtitle}</Text> : null}
                 </View>
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.activityAmt}>{formatNgn(Math.abs(item.amount_ngn))}</Text>
+              <View style={styles.activityRight}>
+                <Text style={styles.activityAmt} numberOfLines={1}>{formatNgn(Math.abs(item.amount_ngn))}</Text>
                 <View style={[styles.pill, item.status === 'Successful' ? styles.pillOk : styles.pillPending]}>
-                  <Text style={[styles.pillText, { color: item.status === 'Successful' ? colors.jade : colors.signal }]}>
+                  <Text style={[styles.pillText, { color: item.status === 'Successful' ? colors.jade : colors.signal }]} numberOfLines={1}>
                     {item.status}
                   </Text>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </Animated.View>
       </ScrollView>
+      <ReceiptModal receipt={activityReceipt} onClose={() => setActivityReceipt(null)} colors={colors} />
     </View>
   );
 }
@@ -240,10 +250,12 @@ function getStyles(colors: ThemeColors) {
     listHead: { color: colors.muted, fontSize: 12, letterSpacing: 0.5, marginBottom: spacing.sm },
     empty: { color: colors.muted, fontSize: 12, paddingVertical: spacing.md },
     activityRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.line },
-    activityLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    activityLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginRight: spacing.sm },
+    activityTextWrap: { flex: 1 },
     activityDot: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.surface2 },
     activityTitle: { color: colors.ink, fontSize: 13, fontWeight: '600' },
     activitySub: { color: colors.muted, fontSize: 11, marginTop: 2 },
+    activityRight: { flexShrink: 0, alignItems: 'flex-end' },
     activityAmt: { color: colors.ink, fontSize: 13, fontWeight: '700' },
     pill: { marginTop: 3, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill },
     pillOk: { backgroundColor: 'rgba(52,178,126,0.15)' },

@@ -3,12 +3,14 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linkin
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { useRefresh } from '../data/RefreshContext';
 import ScreenHeader from '../components/ScreenHeader';
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000];
 
 export default function DepositScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors }) {
   const { refreshUser } = useAuth();
+  const { refresh } = useRefresh();
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [statusOk, setStatusOk] = useState(false);
@@ -40,6 +42,7 @@ export default function DepositScreen({ onBack, colors }: { onBack: () => void; 
     try {
       const res = await api.deposit(Number(amount));
       await refreshUser();
+      refresh();
       setStatus(res.message);
       setStatusOk(true);
       setAmount('');

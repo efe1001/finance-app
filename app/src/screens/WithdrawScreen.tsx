@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useCurrency } from '../currency/CurrencyContext';
 import type { ScreenKey } from '../components/Drawer';
+import { useRefresh } from '../data/RefreshContext';
 import ScreenHeader from '../components/ScreenHeader';
 
 type Bank = { code: string; name: string };
@@ -18,7 +19,8 @@ export default function WithdrawScreen({
   onNavigate: (key: ScreenKey) => void;
   colors: ThemeColors;
 }) {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const { refresh } = useRefresh();
   const { currency, formatNgn } = useCurrency();
   const styles = getStyles(colors);
   const [limits, setLimits] = useState<{ min_withdrawal_ngn: number; max_withdrawal_ngn: number } | null>(null);
@@ -94,6 +96,8 @@ export default function WithdrawScreen({
       });
       setStatus(res.message);
       setStatusOk(true);
+      await refreshUser();
+      refresh();
       setAmount('');
       setAccountNumber('');
       setBank(null);

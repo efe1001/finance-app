@@ -6,6 +6,7 @@ import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { CurrencyProvider } from './src/currency/CurrencyContext';
 import { BalanceVisibilityProvider } from './src/wallet/BalanceVisibilityContext';
 import { AppLockProvider, useAppLock } from './src/security/AppLockContext';
+import { RefreshProvider } from './src/data/RefreshContext';
 import { initPushNotifications } from './src/notifications';
 import { initCrashReporting, identifyCrashUser } from './src/crashReporting';
 import { checkForUpdate, UpdateInfo } from './src/updateCheck';
@@ -131,7 +132,9 @@ function App() {
           <BalanceVisibilityProvider>
             <AppLockProvider>
               <AuthProvider>
-                <Root />
+                <RefreshProvider>
+                  <Root />
+                </RefreshProvider>
               </AuthProvider>
             </AppLockProvider>
           </BalanceVisibilityProvider>

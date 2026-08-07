@@ -9,6 +9,7 @@ import type { ScreenKey } from '../components/Drawer';
 import ScreenHeader from '../components/ScreenHeader';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
+import { useRefresh } from '../data/RefreshContext';
 
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 const NGN_PER_USD = 1631;
@@ -51,6 +52,7 @@ export default function TradeScreen({
   colors: ThemeColors;
 }) {
   const { user, refreshUser } = useAuth();
+  const { refresh } = useRefresh();
   const { currency, fromUsd, toUsd, fromNgn, format, formatNgn } = useCurrency();
   const styles = getStyles(colors);
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
@@ -207,6 +209,7 @@ export default function TradeScreen({
         receiptFilename: receipt?.name ?? undefined,
       });
       await Promise.all([refreshUser(), load()]);
+      refresh();
       setStatus('Order submitted — awaiting admin confirmation.');
       setStatusOk(true);
       setOrderReceipt({

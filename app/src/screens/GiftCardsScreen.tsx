@@ -5,6 +5,7 @@ import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useCurrency, NGN_PER_USD } from '../currency/CurrencyContext';
+import { useRefresh } from '../data/RefreshContext';
 import type { ScreenKey } from '../components/Drawer';
 import ScreenHeader from '../components/ScreenHeader';
 import IconBadge from '../components/IconBadge';
@@ -54,6 +55,7 @@ export default function GiftCardsScreen({
 }) {
   const { user } = useAuth();
   const { formatNgn } = useCurrency();
+  const { refresh } = useRefresh();
   const styles = getStyles(colors);
   const [rates, setRates] = useState<Rate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -122,6 +124,7 @@ export default function GiftCardsScreen({
       });
       setStatus(res.message);
       setStatusOk(true);
+      refresh();
       setSaleReceipt({
         heading: `Sell ${card.brand} Gift Card`,
         status: 'Pending verification',

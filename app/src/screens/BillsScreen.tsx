@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert 
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { useRefresh } from '../data/RefreshContext';
 import ScreenHeader from '../components/ScreenHeader';
 import IconBadge from '../components/IconBadge';
 
@@ -19,6 +20,7 @@ const BILLERS = [
 
 export default function BillsScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors }) {
   const { refreshUser } = useAuth();
+  const { refresh } = useRefresh();
   const styles = getStyles(colors);
   const [selected, setSelected] = useState('Airtime');
   const [recipient, setRecipient] = useState('');
@@ -32,6 +34,7 @@ export default function BillsScreen({ onBack, colors }: { onBack: () => void; co
     try {
       await api.addTransaction({ type: 'bill', title: selected, subtitle: recipient, amountNgn: -Number(amount) });
       await refreshUser();
+      refresh();
       setStatus(`${selected} payment of ₦${amount} submitted — awaiting admin approval.`);
       setStatusOk(true);
       setRecipient('');
