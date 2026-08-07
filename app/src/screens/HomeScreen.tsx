@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Animated } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Animated, ActivityIndicator } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -41,14 +41,17 @@ export default function HomeScreen({
   const [ticker, setTicker] = useState<TickerItem[]>([]);
   const [activity, setActivity] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const fade = useRef(new Animated.Value(0)).current;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      let failed = false;
       const [prices, txns] = await Promise.all([
-        api.cryptoPrices(TICKER_IDS.map(t => t.id).join(',')).catch(() => ({})),
-        api.transactions().catch(() => []),
+        api.cryptoPrices(TICKER_IDS.map(t => t.id).join(',')).catch(() => { failed = true; return {}; }),
+        api.transactions().catch(() => { failed = true; return []; }),
       ]);
       setTicker(
         TICKER_IDS.map(t => ({
@@ -59,8 +62,10 @@ export default function HomeScreen({
         })),
       );
       setActivity(txns);
+      setLoadError(failed);
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
   }, []);
 
@@ -71,12 +76,33 @@ export default function HomeScreen({
 
   const balanceText = balanceHidden ? '••••••' : formatNgn(user?.walletBalanceNgn ?? 0);
 
+  if (initialLoading) {
+    return (
+      <View style={styles.screen}>
+        <View style={styles.centerFill}>
+          <ActivityIndicator size="large" color={colors.signal} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.screen}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
+        {loadError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>Couldn't load the latest data. Pull down to try again.</Text>
+          </View>
+        )}
+        {user?.ninStatus === 'unverified' && (
+          <TouchableOpacity style={styles.ninBanner} onPress={() => onNavigate('settings')}>
+            <Text style={styles.ninBannerText}>Verify your NIN to unlock full features</Text>
+            <Text style={styles.ninBannerArrow}>→</Text>
+          </TouchableOpacity>
+        )}
         <View style={styles.topBar}>
           <TouchableOpacity onPress={onOpenDrawer} style={styles.iconBtn}>
             <Text style={styles.iconBtnGlyph}>≡</Text>
@@ -174,7 +200,13 @@ export default function HomeScreen({
 function getStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
+    centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+    errorBanner: { backgroundColor: 'rgba(226,96,77,0.1)', borderWidth: 1, borderColor: colors.ember, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+    errorBannerText: { color: colors.ember, fontSize: 11.5, lineHeight: 16 },
+    ninBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(226,163,58,0.1)', borderWidth: 1, borderColor: colors.signal, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+    ninBannerText: { color: colors.ink, fontSize: 12.5, fontWeight: '600', flex: 1 },
+    ninBannerArrow: { color: colors.signal, fontSize: 16, fontWeight: '700' },
     topBar: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
     iconBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
     iconBtnGlyph: { color: colors.ink, fontSize: 16 },

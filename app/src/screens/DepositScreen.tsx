@@ -11,6 +11,7 @@ export default function DepositScreen({ onBack, colors }: { onBack: () => void; 
   const { refreshUser } = useAuth();
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState<string | null>(null);
+  const [statusOk, setStatusOk] = useState(false);
   const [loadingCard, setLoadingCard] = useState(false);
   const [loadingManual, setLoadingManual] = useState(false);
   const styles = getStyles(colors);
@@ -23,8 +24,10 @@ export default function DepositScreen({ onBack, colors }: { onBack: () => void; 
       const res = await api.flutterwave.initiateDeposit(Number(amount));
       await Linking.openURL(res.paymentLink);
       setStatus('Complete your payment in the browser, then come back and pull to refresh — your balance updates automatically once confirmed.');
+      setStatusOk(true);
     } catch (e: any) {
       setStatus(e.message);
+      setStatusOk(false);
     } finally {
       setLoadingCard(false);
     }
@@ -38,9 +41,11 @@ export default function DepositScreen({ onBack, colors }: { onBack: () => void; 
       const res = await api.deposit(Number(amount));
       await refreshUser();
       setStatus(res.message);
+      setStatusOk(true);
       setAmount('');
     } catch (e: any) {
       setStatus(e.message);
+      setStatusOk(false);
     } finally {
       setLoadingManual(false);
     }
@@ -68,7 +73,7 @@ export default function DepositScreen({ onBack, colors }: { onBack: () => void; 
           ))}
         </View>
 
-        {status && <Text style={styles.status}>{status}</Text>}
+        {status && <Text style={[styles.status, statusOk ? styles.statusOk : styles.statusError]}>{status}</Text>}
 
         <TouchableOpacity style={[styles.cta, (!amount || loadingCard) && { opacity: 0.6 }]} onPress={payWithCard} disabled={!amount || loadingCard}>
           <Text style={styles.ctaText}>{loadingCard ? 'Opening…' : 'Pay with Card / Bank (Instant)'}</Text>
@@ -116,7 +121,9 @@ function getStyles(colors: ThemeColors) {
       borderColor: colors.line,
     },
     quickChipText: { color: colors.ink, fontWeight: '600', fontSize: 12 },
-    status: { color: colors.jade, fontSize: 12, marginBottom: spacing.sm, lineHeight: 17 },
+    status: { fontSize: 12, marginBottom: spacing.sm, lineHeight: 17 },
+    statusOk: { color: colors.jade },
+    statusError: { color: colors.ember },
     cta: { backgroundColor: colors.signal, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center' },
     ctaText: { color: colors.signalInk, fontWeight: '700', fontSize: 15 },
     ctaGhost: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center' },

@@ -23,11 +23,17 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [reveal, setReveal] = useState(false);
   const [referralCode, setReferralCode] = useState('');
   const [country, setCountry] = useState<typeof COUNTRIES[number] | null>(null);
   const [countryModalOpen, setCountryModalOpen] = useState(false);
 
+  const mismatch = password.length > 0 && confirmPassword.length > 0 && password !== confirmPassword;
+  const canSubmit = !!name && !!email && password.length >= 6 && password === confirmPassword;
+
   async function submit() {
+    if (!canSubmit) return;
     await register(name, email, password, referralCode, country?.name);
     if (country) setCurrency(country.currency);
   }
@@ -59,14 +65,32 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
 
         <View style={styles.field}>
           <Text style={styles.label}>PASSWORD</Text>
+          <View style={styles.passwordRow}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="At least 6 characters"
+              placeholderTextColor={colors.muted}
+              secureTextEntry={!reveal}
+            />
+            <TouchableOpacity style={styles.revealBtn} onPress={() => setReveal(r => !r)} hitSlop={8}>
+              <Text style={styles.revealBtnText}>{reveal ? 'Hide' : 'Show'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>CONFIRM PASSWORD</Text>
           <TextInput
             style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="At least 6 characters"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="Re-enter your password"
             placeholderTextColor={colors.muted}
-            secureTextEntry
+            secureTextEntry={!reveal}
           />
+          {mismatch && <Text style={styles.mismatch}>Passwords don't match.</Text>}
         </View>
 
         <View style={styles.field}>
@@ -93,7 +117,7 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
 
         {error && <Text style={styles.error}>{error}</Text>}
 
-        <TouchableOpacity style={[styles.cta, loading && { opacity: 0.6 }]} disabled={loading} onPress={submit}>
+        <TouchableOpacity style={[styles.cta, (loading || !canSubmit) && { opacity: 0.6 }]} disabled={loading || !canSubmit} onPress={submit}>
           <Text style={styles.ctaText}>{loading ? 'Creating account…' : 'Create Account'}</Text>
         </TouchableOpacity>
 
@@ -137,6 +161,11 @@ function getStyles(colors: ThemeColors) {
     field: { marginBottom: spacing.lg },
     label: { color: colors.muted, fontSize: 11, letterSpacing: 0.5, marginBottom: spacing.sm },
     input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.lg, color: colors.ink, fontSize: 15, justifyContent: 'center' },
+    passwordRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingRight: spacing.md },
+    passwordInput: { flex: 1, borderWidth: 0, backgroundColor: 'transparent' },
+    revealBtn: { paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
+    revealBtnText: { color: colors.signal, fontSize: 12, fontWeight: '700' },
+    mismatch: { color: colors.ember, fontSize: 11.5, marginTop: spacing.xs },
     pickerValue: { color: colors.ink, fontSize: 15 },
     pickerPlaceholder: { color: colors.muted, fontSize: 15 },
     hint: { color: colors.muted, fontSize: 10.5, marginTop: spacing.xs },

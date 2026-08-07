@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Clipboard, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Clipboard, Alert, ActivityIndicator } from 'react-native';
 import { pick, isErrorWithCode, errorCodes, types as pickerTypes, DocumentPickerResponse } from '@react-native-documents/picker';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
@@ -8,6 +8,7 @@ import { useCurrency } from '../currency/CurrencyContext';
 import type { ScreenKey } from '../components/Drawer';
 import ScreenHeader from '../components/ScreenHeader';
 import IconBadge from '../components/IconBadge';
+import ReceiptModal, { Receipt } from '../components/ReceiptModal';
 
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 const NGN_PER_USD = 1631;
@@ -58,13 +59,17 @@ export default function TradeScreen({
   const [holdings, setHoldings] = useState<Record<string, number>>({});
   const [platformWallets, setPlatformWallets] = useState<{ asset: string; address: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [inputMode, setInputMode] = useState<'currency' | 'crypto'>('currency');
   const [inputValue, setInputValue] = useState('');
   const [myAddress, setMyAddress] = useState('');
   const [status, setStatus] = useState<string | null>(null);
+  const [statusOk, setStatusOk] = useState(false);
   const [addressCopied, setAddressCopied] = useState(false);
   const [receipt, setReceipt] = useState<DocumentPickerResponse | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [orderReceipt, setOrderReceipt] = useState<Receipt | null>(null);
 
   // --- Quidax per-user deposit addresses: built and tested, but on hold until the
   // Quidax account is approved for business/merchant access (sub-accounts API is
@@ -102,10 +107,13 @@ export default function TradeScreen({
       const map: Record<string, number> = {};
       (h as { asset: string; amount: number }[]).forEach(x => (map[x.asset] = Number(x.amount)));
       setHoldings(map);
+      setLoadError(false);
     } catch (e) {
-      // best-effort; keep last known prices
+      // keep last known prices, but flag it so the user knows this isn't just "nothing here"
+      setLoadError(true);
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
   }, []);
 
@@ -173,7 +181,7 @@ export default function TradeScreen({
     }
   }
 
-  async function submitOrder() {
+  async function doSubmitOrder() {
     if (!user || !canSubmit) return;
     setStatus(null);
     setSubmitting(true);
@@ -200,14 +208,54 @@ export default function TradeScreen({
       });
       await Promise.all([refreshUser(), load()]);
       setStatus('Order submitted — awaiting admin confirmation.');
+      setStatusOk(true);
+      setOrderReceipt({
+        heading: `${side === 'buy' ? 'Buy' : 'Sell'} ${asset.symbol}`,
+        status: 'Pending admin confirmation',
+        rows: [
+          { label: 'Date', value: new Date().toLocaleString() },
+          { label: 'Amount', value: formatNgn(amountNgn) },
+          { label: 'Quantity', value: `${qty.toFixed(6)} ${asset.symbol}` },
+          { label: 'Price', value: `${format(priceUsd, { maximumFractionDigits: priceUsd > 100 ? 0 : 2 })} / ${asset.symbol}` },
+          side === 'buy'
+            ? { label: 'Sent to your address', value: myAddress }
+            : { label: 'Sent to our address', value: platformAddress },
+        ],
+        footerNote: 'An admin manually confirms every trade. This receipt is proof of submission, not settlement.',
+      });
       setReceipt(null);
       setInputValue('');
       setMyAddress('');
     } catch (e: any) {
       setStatus(e.message);
+      setStatusOk(false);
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function submitOrder() {
+    if (!user || !canSubmit) return;
+    const verb = side === 'buy' ? 'Buy' : 'Sell';
+    const detail =
+      side === 'buy'
+        ? `You'll pay ${formatNgn(amountNgn)} for ${qty.toFixed(6)} ${asset.symbol}, sent to ${myAddress}.`
+        : `You're sending ${qty.toFixed(6)} ${asset.symbol} and will be paid ${formatNgn(amountNgn)} once confirmed.`;
+    Alert.alert(`Confirm ${verb} Order`, detail, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Confirm', onPress: doSubmitOrder },
+    ]);
+  }
+
+  if (initialLoading) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Trade" onBack={onBack} colors={colors} />
+        <View style={styles.centerFill}>
+          <ActivityIndicator size="large" color={colors.signal} />
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -217,6 +265,11 @@ export default function TradeScreen({
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
+        {loadError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>Couldn't refresh prices — showing the last known values. Pull down to retry.</Text>
+          </View>
+        )}
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>WALLET BALANCE</Text>
           <Text style={styles.balanceAmount}>{formatNgn(user?.walletBalanceNgn ?? 0)}</Text>
@@ -251,7 +304,9 @@ export default function TradeScreen({
           {ASSETS.map((a, idx) => (
             <TouchableOpacity key={a.id} style={[styles.assetChip, idx === assetIdx && styles.assetChipOn]} onPress={() => setAssetIdx(idx)}>
               <Text style={[styles.assetChipText, idx === assetIdx && styles.assetChipTextOn]}>{a.symbol}</Text>
-              {(holdings[a.symbol] ?? 0) > 0 && <View style={styles.ownedDot} />}
+              {(holdings[a.symbol] ?? 0) > 0 && (
+                <Text style={styles.ownedCheck} accessibilityLabel="You own this asset">✓</Text>
+              )}
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -356,13 +411,14 @@ export default function TradeScreen({
           </View>
         )}
 
-        {status && <Text style={styles.status}>{status}</Text>}
+        {status && <Text style={[styles.status, statusOk ? styles.statusOk : styles.statusError]}>{status}</Text>}
 
         <TouchableOpacity style={[styles.cta, (!canSubmit || submitting) && { opacity: 0.5 }]} onPress={submitOrder} disabled={!canSubmit || submitting}>
           <Text style={styles.ctaText}>{submitting ? 'Submitting…' : `Submit ${side === 'buy' ? 'Buy' : 'Sell'} Order`}</Text>
         </TouchableOpacity>
         <Text style={styles.trustNote}>Live prices from CoinGecko. An admin manually confirms and completes every trade.</Text>
       </ScrollView>
+      <ReceiptModal receipt={orderReceipt} onClose={() => setOrderReceipt(null)} colors={colors} />
     </View>
   );
 }
@@ -389,7 +445,10 @@ function getStyles(colors: ThemeColors) {
     assetChipOn: { backgroundColor: colors.signal, borderColor: 'transparent' },
     assetChipText: { color: colors.muted, fontWeight: '700', fontSize: 12 },
     assetChipTextOn: { color: colors.signalInk },
-    ownedDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.jade },
+    ownedCheck: { color: colors.jade, fontSize: 10, fontWeight: '700' },
+    centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    errorBanner: { backgroundColor: 'rgba(226,96,77,0.1)', borderWidth: 1, borderColor: colors.ember, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.lg },
+    errorBannerText: { color: colors.ember, fontSize: 11.5, lineHeight: 16 },
     priceCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: spacing.xl, marginBottom: spacing.lg },
     priceLabel: { color: colors.muted, fontSize: 12 },
     price: { color: colors.ink, fontSize: 28, fontWeight: '700', marginTop: spacing.sm },
@@ -412,7 +471,9 @@ function getStyles(colors: ThemeColors) {
     addressText: { flex: 1, color: colors.signal, fontSize: 14, fontWeight: '700' },
     copyBtn: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
     copyBtnText: { color: colors.ink, fontSize: 11.5, fontWeight: '700' },
-    status: { color: colors.jade, fontSize: 12, marginTop: spacing.sm, marginBottom: spacing.sm },
+    status: { fontSize: 12, marginTop: spacing.sm, marginBottom: spacing.sm },
+    statusOk: { color: colors.jade },
+    statusError: { color: colors.ember },
     insufficientBox: { backgroundColor: 'rgba(226,96,77,0.1)', borderWidth: 1, borderColor: colors.ember, borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.sm },
     insufficientTitle: { color: colors.ember, fontSize: 13, fontWeight: '700', marginBottom: 2 },
     insufficientText: { color: colors.ember, fontSize: 12, lineHeight: 17 },

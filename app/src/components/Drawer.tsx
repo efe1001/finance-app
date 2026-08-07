@@ -22,6 +22,7 @@ export type ScreenKey =
   | 'deposit'
   | 'withdraw'
   | 'settings'
+  | 'payment'
   | 'admin';
 
 const NAV_ITEMS: { key: ScreenKey; label: string; icon: string }[] = [

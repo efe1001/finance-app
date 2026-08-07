@@ -80,6 +80,15 @@ export const api = {
       body: JSON.stringify(body),
     }),
   limits: () => request<Record<string, number>>('/wallet/limits'),
+  payoutAccount: () =>
+    request<{ bankCode: string | null; bankName: string; accountNumber: string; accountName: string } | null>(
+      '/wallet/payout-account',
+    ),
+  savePayoutAccount: (body: { bankCode?: string; bankName: string; accountNumber: string; accountName: string }) =>
+    request<{ bankCode: string | null; bankName: string; accountNumber: string; accountName: string }>(
+      '/wallet/payout-account',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   platformWallets: () => request<{ asset: string; address: string }[]>('/wallet/platform-wallets'),
   holdings: () => request<{ asset: string; amount: number }[]>('/wallet/holdings'),
 

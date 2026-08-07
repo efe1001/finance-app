@@ -7,9 +7,30 @@ import { useCurrency } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
+import ReceiptModal, { Receipt } from '../components/ReceiptModal';
 
 type Holding = { symbol: string; icon: string; usd: number; changePct: number; qty: number };
-type Transaction = { id: number; title: string; subtitle: string | null; amount_ngn: number; status: string };
+type Transaction = {
+  id: number;
+  title: string;
+  subtitle: string | null;
+  amount_ngn: number;
+  status: string;
+  type: string;
+  address?: string | null;
+  asset?: string | null;
+  qty?: number | null;
+  created_at?: string;
+};
+
+const HISTORY_FILTERS: { key: string; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'deposit', label: 'Deposits' },
+  { key: 'withdrawal', label: 'Withdrawals' },
+  { key: 'crypto', label: 'Trades' },
+  { key: 'bill', label: 'Bills' },
+  { key: 'giftcard', label: 'Gift Cards' },
+];
 
 const ASSETS = [
   { symbol: 'BTC', id: 'bitcoin', icon: 'bitcoin' },
@@ -30,9 +51,11 @@ const ACTIONS: { key: ScreenKey; label: string; icon: string }[] = [
 ];
 
 export default function WalletScreen({
+  onOpenDrawer,
   onNavigate,
   colors,
 }: {
+  onOpenDrawer: () => void;
   onNavigate: (key: ScreenKey) => void;
   colors: ThemeColors;
 }) {
@@ -41,22 +64,43 @@ export default function WalletScreen({
   const { balanceHidden, toggleBalanceHidden } = useBalanceVisibility();
   const styles = getStyles(colors);
   const [tab, setTab] = useState<'holdings' | 'history'>('holdings');
+  const [historyFilter, setHistoryFilter] = useState('all');
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [history, setHistory] = useState<Transaction[]>([]);
   const [historyPage, setHistoryPage] = useState(0);
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [txnReceipt, setTxnReceipt] = useState<Receipt | null>(null);
   const fade = useRef(new Animated.Value(0)).current;
   const PAGE_SIZE = 20;
+
+  function openReceipt(t: Transaction) {
+    const rows = [
+      { label: 'Date', value: t.created_at ? new Date(t.created_at).toLocaleString() : '—' },
+      { label: 'Amount', value: formatNgn(Math.abs(t.amount_ngn)) },
+    ];
+    if (t.subtitle) rows.push({ label: 'Details', value: t.subtitle });
+    if (t.asset) rows.push({ label: 'Asset', value: `${t.qty ?? ''} ${t.asset}`.trim() });
+    if (t.address) rows.push({ label: 'Reference / Address', value: t.address });
+    rows.push({ label: 'Reference ID', value: `#${t.id}` });
+    setTxnReceipt({
+      heading: t.title,
+      status: t.status,
+      rows,
+      footerNote: t.amount_ngn < 0 ? 'Money out of your wallet.' : 'Money into your wallet.',
+    });
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      let failed = false;
       const [prices, txns, myHoldings] = await Promise.all([
-        api.cryptoPrices(ASSETS.map(a => a.id).join(',')).catch(() => ({})),
-        api.transactions({ limit: PAGE_SIZE, offset: 0 }).catch(() => []),
-        api.holdings().catch(() => []),
+        api.cryptoPrices(ASSETS.map(a => a.id).join(',')).catch(() => { failed = true; return {}; }),
+        api.transactions({ limit: PAGE_SIZE, offset: 0 }).catch(() => { failed = true; return []; }),
+        api.holdings().catch(() => { failed = true; return []; }),
       ]);
       setHoldings(
         ASSETS.map(a => {
@@ -73,6 +117,7 @@ export default function WalletScreen({
       setHistory(txns);
       setHistoryPage(0);
       setHasMoreHistory(txns.length === PAGE_SIZE);
+      setLoadError(failed);
     } finally {
       setLoading(false);
     }
@@ -98,6 +143,7 @@ export default function WalletScreen({
   }, [load, fade]);
 
   const balanceText = balanceHidden ? '••••••' : formatNgn(user?.walletBalanceNgn ?? 0);
+  const filteredHistory = historyFilter === 'all' ? history : history.filter(t => t.type === historyFilter);
 
   return (
     <View style={styles.screen}>
@@ -105,6 +151,18 @@ export default function WalletScreen({
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={onOpenDrawer} style={styles.iconBtn}>
+            <Text style={styles.iconBtnGlyph}>≡</Text>
+          </TouchableOpacity>
+          <Text style={styles.topBarTitle}>Wallet</Text>
+          <View style={styles.iconBtn} />
+        </View>
+        {loadError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>Couldn't load the latest data. Pull down to try again.</Text>
+          </View>
+        )}
         <View style={styles.balanceHead}>
           <Text style={styles.balanceLabel}>WALLET BALANCE</Text>
           <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
@@ -160,23 +218,32 @@ export default function WalletScreen({
                   </View>
                 </View>
               ))
-            : history.length === 0
-            ? <Text style={styles.empty}>No transactions yet.</Text>
             : (
               <>
-                {history.map(t => (
-                  <View key={t.id} style={styles.holdingRow}>
-                    <View>
-                      <Text style={styles.holdingSymbol}>{t.title}</Text>
-                      {t.subtitle ? <Text style={styles.holdingChange}>{t.subtitle}</Text> : null}
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.holdingValue}>{formatNgn(Math.abs(t.amount_ngn))}</Text>
-                      <Text style={styles.holdingPrice}>{t.status}</Text>
-                    </View>
-                  </View>
-                ))}
-                {hasMoreHistory && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, marginBottom: spacing.md }}>
+                  {HISTORY_FILTERS.map(f => (
+                    <TouchableOpacity key={f.key} style={[styles.filterChip, historyFilter === f.key && styles.filterChipOn]} onPress={() => setHistoryFilter(f.key)}>
+                      <Text style={[styles.filterChipText, historyFilter === f.key && styles.filterChipTextOn]}>{f.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                {filteredHistory.length === 0 ? (
+                  <Text style={styles.empty}>{history.length === 0 ? 'No transactions yet.' : 'No transactions in this category.'}</Text>
+                ) : (
+                  filteredHistory.map(t => (
+                    <TouchableOpacity key={t.id} style={styles.holdingRow} onPress={() => openReceipt(t)}>
+                      <View>
+                        <Text style={styles.holdingSymbol}>{t.title}</Text>
+                        {t.subtitle ? <Text style={styles.holdingChange}>{t.subtitle}</Text> : null}
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.holdingValue}>{formatNgn(Math.abs(t.amount_ngn))}</Text>
+                        <Text style={styles.holdingPrice}>{t.status}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                )}
+                {hasMoreHistory && historyFilter === 'all' && (
                   <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMoreHistory} disabled={loadingMore}>
                     <Text style={styles.loadMoreText}>{loadingMore ? 'Loading…' : 'Load More'}</Text>
                   </TouchableOpacity>
@@ -185,6 +252,7 @@ export default function WalletScreen({
             )}
         </Animated.View>
       </ScrollView>
+      <ReceiptModal receipt={txnReceipt} onClose={() => setTxnReceipt(null)} colors={colors} />
     </View>
   );
 }
@@ -193,6 +261,16 @@ function getStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
     content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg },
+    iconBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
+    iconBtnGlyph: { color: colors.ink, fontSize: 16 },
+    topBarTitle: { color: colors.ink, fontSize: 16, fontWeight: '700' },
+    errorBanner: { backgroundColor: 'rgba(226,96,77,0.1)', borderWidth: 1, borderColor: colors.ember, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+    errorBannerText: { color: colors.ember, fontSize: 11.5, lineHeight: 16 },
+    filterChip: { paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+    filterChipOn: { backgroundColor: colors.signal, borderColor: 'transparent' },
+    filterChipText: { color: colors.muted, fontSize: 11.5, fontWeight: '700' },
+    filterChipTextOn: { color: colors.signalInk },
     balanceHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     balanceLabel: { color: colors.muted, fontSize: 11, letterSpacing: 1 },
     eyeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },

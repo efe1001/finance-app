@@ -131,6 +131,36 @@ router.post('/withdraw', requireAuth, async (req, res) => {
   res.status(201).json({ status: 'Pending', message: 'Withdrawal submitted — awaiting admin approval.' });
 });
 
+// The single bank account payouts go to (gift card sales, and a quick-fill for
+// withdrawals) — kept on the user record, not per-transaction, so it's one
+// place to manage and always reflects where the user currently wants paying.
+router.get('/payout-account', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT payout_bank_code, payout_bank_name, payout_account_number, payout_account_name FROM users WHERE id = $1',
+    [req.user.id],
+  );
+  const u = rows[0];
+  if (!u || !u.payout_account_number) return res.json(null);
+  res.json({
+    bankCode: u.payout_bank_code,
+    bankName: u.payout_bank_name,
+    accountNumber: u.payout_account_number,
+    accountName: u.payout_account_name,
+  });
+});
+
+router.post('/payout-account', requireAuth, async (req, res) => {
+  const { bankCode, bankName, accountNumber, accountName } = req.body;
+  if (!bankName || !accountNumber || !accountName) {
+    return res.status(400).json({ error: 'bankName, accountNumber and accountName are required' });
+  }
+  await pool.query(
+    'UPDATE users SET payout_bank_code = $1, payout_bank_name = $2, payout_account_number = $3, payout_account_name = $4 WHERE id = $5',
+    [bankCode || null, bankName, accountNumber, accountName, req.user.id],
+  );
+  res.json({ bankCode: bankCode || null, bankName, accountNumber, accountName });
+});
+
 router.get('/limits', requireAuth, async (req, res) => {
   const settingsMap = {};
   (await pool.query('SELECT key, value FROM settings')).rows.forEach(r => (settingsMap[r.key] = Number(r.value)));

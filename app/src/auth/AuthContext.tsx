@@ -10,6 +10,10 @@ type User = {
   referralCode: string;
   ninStatus: string;
   country: string | null;
+  payoutBankCode: string | null;
+  payoutBankName: string | null;
+  payoutAccountNumber: string | null;
+  payoutAccountName: string | null;
 };
 
 type AuthContextValue = {

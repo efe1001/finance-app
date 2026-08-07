@@ -4,6 +4,7 @@ import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ScreenHeader from '../components/ScreenHeader';
+import ReceiptModal, { Receipt } from '../components/ReceiptModal';
 
 type Listing = {
   id: number;
@@ -21,6 +22,8 @@ type MyListing = Listing & {
   buyer_id: number | null;
   buyer_name: string | null;
 };
+
+const ASSETS = ['BTC', 'ETH', 'USDT', 'USDC', 'BNB', 'SOL', 'XRP', 'DOGE'];
 
 const STATUS_LABEL: Record<string, string> = {
   Open: 'Waiting for a taker',
@@ -44,6 +47,25 @@ export default function P2PScreen({ onBack, colors }: { onBack: () => void; colo
   const [amount, setAmount] = useState('');
   const [rate, setRate] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [tradeReceipt, setTradeReceipt] = useState<Receipt | null>(null);
+
+  function openReceipt(item: MyListing) {
+    const isLister = item.user_id === user?.id;
+    const otherName = isLister ? item.buyer_name : item.seller_name;
+    setTradeReceipt({
+      heading: `${item.side === 'sell' ? 'Sell' : 'Buy'} ${item.amount} ${item.asset}`,
+      status: STATUS_LABEL[item.status] || item.status,
+      rows: [
+        { label: 'Role', value: isLister ? 'You listed this' : 'You claimed this' },
+        { label: 'Counterparty', value: otherName || 'Not yet matched' },
+        { label: 'Rate', value: `₦${item.rate_ngn.toLocaleString()} / ${item.asset}` },
+        { label: 'Total', value: `₦${(item.amount * item.rate_ngn).toLocaleString()}` },
+        { label: 'Payment method', value: item.payment_method },
+        { label: 'Reference ID', value: `#${item.id}` },
+      ],
+      footerNote: 'P2P trades settle directly between the two parties — Finance App does not hold or move these funds.',
+    });
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,7 +110,7 @@ export default function P2PScreen({ onBack, colors }: { onBack: () => void; colo
     }
   }
 
-  async function markPaid(id: number) {
+  async function doMarkPaid(id: number) {
     setBusyId(id);
     try {
       await api.markP2pPaid(id);
@@ -100,7 +122,14 @@ export default function P2PScreen({ onBack, colors }: { onBack: () => void; colo
     }
   }
 
-  async function confirm(id: number) {
+  function markPaid(id: number) {
+    Alert.alert('Confirm payment sent', "Only confirm this once you've actually sent the money — the other party will be notified to release funds.", [
+      { text: 'Cancel', style: 'cancel' },
+      { text: "Yes, I've Paid", onPress: () => doMarkPaid(id) },
+    ]);
+  }
+
+  async function doConfirm(id: number) {
     setBusyId(id);
     try {
       await api.confirmP2pTrade(id);
@@ -110,6 +139,13 @@ export default function P2PScreen({ onBack, colors }: { onBack: () => void; colo
     } finally {
       setBusyId(null);
     }
+  }
+
+  function confirm(id: number) {
+    Alert.alert('Confirm funds received', "Only confirm once you've actually received payment — this completes the trade and can't be undone.", [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Yes, Confirm', onPress: () => doConfirm(id) },
+    ]);
   }
 
   async function cancel(id: number) {
@@ -188,8 +224,13 @@ export default function P2PScreen({ onBack, colors }: { onBack: () => void; colo
                     Rate ₦{item.rate_ngn.toLocaleString()}/{item.asset} · {isLister ? 'you listed' : 'you claimed'}
                     {otherName ? ` · with ${otherName}` : ''}
                   </Text>
-                  <View style={[styles.statusPill, statusPillStyle(item.status, colors)]}>
-                    <Text style={[styles.statusPillText, { color: statusColor(item.status, colors) }]}>{STATUS_LABEL[item.status]}</Text>
+                  <View style={styles.cardBottom}>
+                    <View style={[styles.statusPill, statusPillStyle(item.status, colors)]}>
+                      <Text style={[styles.statusPillText, { color: statusColor(item.status, colors) }]}>{STATUS_LABEL[item.status]}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => openReceipt(item)}>
+                      <Text style={styles.viewBtn}>Receipt →</Text>
+                    </TouchableOpacity>
                   </View>
                   {(canMarkPaid || canConfirm || canCancel) && (
                     <View style={styles.tradeActions}>
@@ -229,7 +270,13 @@ export default function P2PScreen({ onBack, colors }: { onBack: () => void; colo
                 <Text style={[styles.segText, side === 'buy' && styles.segTextOn]}>Buy</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} value={asset} onChangeText={setAsset} placeholder="Asset (e.g. BTC)" placeholderTextColor={colors.muted} />
+            <View style={styles.assetPicker}>
+              {ASSETS.map(a => (
+                <TouchableOpacity key={a} style={[styles.assetPickerChip, asset === a && styles.assetPickerChipOn]} onPress={() => setAsset(a)}>
+                  <Text style={[styles.assetPickerChipText, asset === a && styles.assetPickerChipTextOn]}>{a}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             <TextInput style={styles.input} value={amount} onChangeText={setAmount} placeholder="Amount" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
             <TextInput style={styles.input} value={rate} onChangeText={setRate} placeholder="Rate per unit (₦)" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
             {error && <Text style={styles.error}>{error}</Text>}
@@ -244,6 +291,7 @@ export default function P2PScreen({ onBack, colors }: { onBack: () => void; colo
           </View>
         </View>
       </Modal>
+      <ReceiptModal receipt={tradeReceipt} onClose={() => setTradeReceipt(null)} colors={colors} />
     </View>
   );
 }
@@ -292,6 +340,11 @@ function getStyles(colors: ThemeColors) {
     segText: { color: colors.muted, fontWeight: '700', fontSize: 13 },
     segTextOn: { color: colors.signalInk },
     input: { backgroundColor: colors.surface2, borderRadius: radius.sm, padding: spacing.md, color: colors.ink, marginBottom: spacing.sm },
+    assetPicker: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginHorizontal: spacing.lg, marginBottom: spacing.md },
+    assetPickerChip: { paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: 1, borderColor: 'transparent' },
+    assetPickerChipOn: { backgroundColor: colors.signal },
+    assetPickerChipText: { color: colors.muted, fontSize: 12, fontWeight: '700' },
+    assetPickerChipTextOn: { color: colors.signalInk },
     error: { color: colors.ember, fontSize: 12, marginBottom: spacing.sm },
     modalActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
     modalCancel: { flex: 1, alignItems: 'center', padding: spacing.md, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line },

@@ -33,6 +33,10 @@ function publicUser(user) {
     referralCode: user.referral_code,
     ninStatus: user.nin_status,
     country: user.country,
+    payoutBankCode: user.payout_bank_code,
+    payoutBankName: user.payout_bank_name,
+    payoutAccountNumber: user.payout_account_number,
+    payoutAccountName: user.payout_account_name,
   };
 }
 

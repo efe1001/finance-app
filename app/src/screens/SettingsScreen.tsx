@@ -11,6 +11,7 @@ import { APP_VERSION } from '../appVersion';
 import { checkForUpdate, UpdateInfo } from '../updateCheck';
 import UpdateModal from '../components/UpdateModal';
 import ScreenHeader from '../components/ScreenHeader';
+import type { ScreenKey } from '../components/Drawer';
 
 type SubScreen =
   | 'root'
@@ -52,7 +53,15 @@ function Row({
   );
 }
 
-export default function SettingsScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors }) {
+export default function SettingsScreen({
+  onBack,
+  colors,
+  onNavigate,
+}: {
+  onBack: () => void;
+  colors: ThemeColors;
+  onNavigate: (key: ScreenKey) => void;
+}) {
   const [sub, setSub] = useState<SubScreen>('root');
 
   if (sub === 'profile') return <ProfileScreen onBack={() => setSub('root')} colors={colors} />;
@@ -64,17 +73,19 @@ export default function SettingsScreen({ onBack, colors }: { onBack: () => void;
   if (sub === 'support') return <SupportScreen onBack={() => setSub('root')} colors={colors} />;
   if (sub === 'currency') return <CurrencyScreen onBack={() => setSub('root')} colors={colors} />;
 
-  return <RootSettings onBack={onBack} colors={colors} onGoTo={setSub} />;
+  return <RootSettings onBack={onBack} colors={colors} onGoTo={setSub} onNavigate={onNavigate} />;
 }
 
 function RootSettings({
   onBack,
   colors,
   onGoTo,
+  onNavigate,
 }: {
   onBack: () => void;
   colors: ThemeColors;
   onGoTo: (s: SubScreen) => void;
+  onNavigate: (key: ScreenKey) => void;
 }) {
   const { user, logout } = useAuth();
   const { mode, toggleMode } = useTheme();
@@ -115,6 +126,18 @@ function RootSettings({
         <Text style={styles.sectionHead}>ACCOUNT</Text>
         <View style={styles.card}>
           <Row icon="☺" label="My Profile" colors={colors} onPress={() => onGoTo('profile')} />
+          <Row
+            icon="🏦"
+            label="Payment Details"
+            colors={colors}
+            onPress={() => onNavigate('payment')}
+            right={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                {user?.payoutAccountNumber ? <Text style={styles.rowValue}>Set ✓</Text> : null}
+                <Text style={styles.chevron}>›</Text>
+              </View>
+            }
+          />
           <Row icon="▤" label="Reports" colors={colors} onPress={() => onGoTo('reports')} />
           <Row icon="↗" label="Referrals" colors={colors} onPress={() => onGoTo('referrals')} />
           <View style={{ borderBottomWidth: 0 }}>
@@ -215,6 +238,7 @@ function ProfileScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
   const [email, setEmail] = useState(user?.email ?? '');
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [statusOk, setStatusOk] = useState(false);
 
   async function save() {
     setSaving(true);
@@ -223,8 +247,10 @@ function ProfileScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
       await api.updateProfile({ name, email });
       await refreshUser();
       setStatus('Profile updated.');
+      setStatusOk(true);
     } catch (e: any) {
       setStatus(e.message);
+      setStatusOk(false);
     } finally {
       setSaving(false);
     }
@@ -242,7 +268,7 @@ function ProfileScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
           <Text style={styles.flabel}>EMAIL</Text>
           <TextInput style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholderTextColor={colors.muted} />
         </View>
-        {status && <Text style={styles.status}>{status}</Text>}
+        {status && <Text style={[styles.status, statusOk ? styles.statusOk : styles.statusError]}>{status}</Text>}
         <TouchableOpacity style={styles.cta} onPress={save} disabled={saving}>
           <Text style={styles.ctaText}>{saving ? 'Saving…' : 'Save Changes'}</Text>
         </TouchableOpacity>
@@ -255,19 +281,29 @@ function PasswordScreen({ onBack, colors }: { onBack: () => void; colors: ThemeC
   const styles = getStyles(colors);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
+  const [confirmNext, setConfirmNext] = useState('');
+  const [reveal, setReveal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [statusOk, setStatusOk] = useState(false);
+
+  const mismatch = next.length > 0 && confirmNext.length > 0 && next !== confirmNext;
+  const canSave = !!current && !!next && next === confirmNext;
 
   async function save() {
+    if (!canSave) return;
     setSaving(true);
     setStatus(null);
     try {
       await api.changePassword(current, next);
       setStatus('Password changed.');
+      setStatusOk(true);
       setCurrent('');
       setNext('');
+      setConfirmNext('');
     } catch (e: any) {
       setStatus(e.message);
+      setStatusOk(false);
     } finally {
       setSaving(false);
     }
@@ -279,14 +315,22 @@ function PasswordScreen({ onBack, colors }: { onBack: () => void; colors: ThemeC
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <View style={styles.field}>
           <Text style={styles.flabel}>CURRENT PASSWORD</Text>
-          <TextInput style={styles.input} value={current} onChangeText={setCurrent} secureTextEntry placeholderTextColor={colors.muted} />
+          <TextInput style={styles.input} value={current} onChangeText={setCurrent} secureTextEntry={!reveal} placeholderTextColor={colors.muted} />
         </View>
         <View style={styles.field}>
           <Text style={styles.flabel}>NEW PASSWORD</Text>
-          <TextInput style={styles.input} value={next} onChangeText={setNext} secureTextEntry placeholderTextColor={colors.muted} />
+          <TextInput style={styles.input} value={next} onChangeText={setNext} secureTextEntry={!reveal} placeholderTextColor={colors.muted} />
         </View>
-        {status && <Text style={styles.status}>{status}</Text>}
-        <TouchableOpacity style={styles.cta} onPress={save} disabled={saving || !current || !next}>
+        <View style={styles.field}>
+          <Text style={styles.flabel}>CONFIRM NEW PASSWORD</Text>
+          <TextInput style={styles.input} value={confirmNext} onChangeText={setConfirmNext} secureTextEntry={!reveal} placeholderTextColor={colors.muted} />
+        </View>
+        <TouchableOpacity style={styles.revealRow} onPress={() => setReveal(r => !r)}>
+          <Text style={styles.revealText}>{reveal ? 'Hide passwords' : 'Show passwords'}</Text>
+        </TouchableOpacity>
+        {mismatch && <Text style={[styles.status, styles.statusError]}>New passwords don't match.</Text>}
+        {status && <Text style={[styles.status, statusOk ? styles.statusOk : styles.statusError]}>{status}</Text>}
+        <TouchableOpacity style={[styles.cta, !canSave && { opacity: 0.5 }]} onPress={save} disabled={saving || !canSave}>
           <Text style={styles.ctaText}>{saving ? 'Saving…' : 'Change Password'}</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -300,6 +344,7 @@ function NinScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors
   const [nin, setNin] = useState('');
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [statusOk, setStatusOk] = useState(false);
 
   async function submit() {
     setSaving(true);
@@ -308,9 +353,11 @@ function NinScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors
       await api.submitNin(nin);
       await refreshUser();
       setStatus('Submitted — an admin will review your NIN shortly.');
+      setStatusOk(true);
       setNin('');
     } catch (e: any) {
       setStatus(e.message);
+      setStatusOk(false);
     } finally {
       setSaving(false);
     }
@@ -325,7 +372,7 @@ function NinScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors
           <Text style={styles.flabel}>NATIONAL IDENTIFICATION NUMBER</Text>
           <TextInput style={styles.input} value={nin} onChangeText={setNin} keyboardType="number-pad" maxLength={11} placeholder="11 digits" placeholderTextColor={colors.muted} />
         </View>
-        {status && <Text style={styles.status}>{status}</Text>}
+        {status && <Text style={[styles.status, statusOk ? styles.statusOk : styles.statusError]}>{status}</Text>}
         <TouchableOpacity style={styles.cta} onPress={submit} disabled={saving || nin.length !== 11}>
           <Text style={styles.ctaText}>{saving ? 'Submitting…' : 'Submit for Verification'}</Text>
         </TouchableOpacity>
@@ -493,7 +540,11 @@ function getStyles(colors: ThemeColors) {
     field: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.sm },
     flabel: { color: colors.muted, fontSize: 10, letterSpacing: 0.5 },
     input: { color: colors.ink, fontSize: 16, fontWeight: '600', marginTop: spacing.xs, padding: 0 },
-    status: { color: colors.jade, fontSize: 12, marginTop: spacing.sm, marginBottom: spacing.sm },
+    status: { fontSize: 12, marginTop: spacing.sm, marginBottom: spacing.sm },
+    statusOk: { color: colors.jade },
+    statusError: { color: colors.ember },
+    revealRow: { alignItems: 'flex-end', marginBottom: spacing.sm },
+    revealText: { color: colors.signal, fontSize: 12, fontWeight: '700' },
     cta: { backgroundColor: colors.signal, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center', marginTop: spacing.md },
     ctaText: { color: colors.signalInk, fontWeight: '700', fontSize: 14 },
     modalHint: { color: colors.muted, fontSize: 12.5, lineHeight: 18, marginBottom: spacing.lg },

@@ -1,43 +1,29 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Modal, FlatList, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Modal, FlatList, ActivityIndicator } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { useCurrency } from '../currency/CurrencyContext';
-import type { ScreenKey } from '../components/Drawer';
 import ScreenHeader from '../components/ScreenHeader';
 
 type Bank = { code: string; name: string };
 
-export default function WithdrawScreen({
-  onBack,
-  onNavigate,
-  colors,
-}: {
-  onBack: () => void;
-  onNavigate: (key: ScreenKey) => void;
-  colors: ThemeColors;
-}) {
-  const { user } = useAuth();
-  const { currency, formatNgn } = useCurrency();
+export default function PaymentDetailsScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors }) {
+  const { user, refreshUser } = useAuth();
   const styles = getStyles(colors);
-  const [limits, setLimits] = useState<{ min_withdrawal_ngn: number; max_withdrawal_ngn: number } | null>(null);
-  const [amount, setAmount] = useState('');
+  const [editing, setEditing] = useState(!user?.payoutAccountNumber);
   const [accountNumber, setAccountNumber] = useState('');
   const [banks, setBanks] = useState<Bank[]>([]);
   const [bank, setBank] = useState<Bank | null>(null);
   const [bankModalVisible, setBankModalVisible] = useState(false);
   const [bankSearch, setBankSearch] = useState('');
-  const [narration, setNarration] = useState('');
   const [resolvedName, setResolvedName] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [statusOk, setStatusOk] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.limits().then(setLimits as any).catch(() => {});
     api.flutterwave.banks().then(setBanks).catch(() => {});
   }, []);
 
@@ -69,98 +55,63 @@ export default function WithdrawScreen({
     [banks, bankSearch],
   );
 
-  const canSubmit = !!amount && !!bank && accountNumber.length === 10 && !!resolvedName && !resolving;
+  const canSave = !!bank && accountNumber.length === 10 && !!resolvedName && !resolving;
 
-  function useSavedAccount() {
-    if (!user?.payoutAccountNumber) return;
-    const saved = banks.find(b => b.code === user.payoutBankCode);
-    if (saved) setBank(saved);
-    else if (user.payoutBankName) setBank({ code: user.payoutBankCode || '', name: user.payoutBankName });
-    setAccountNumber(user.payoutAccountNumber);
-  }
-
-  async function doSubmit() {
-    if (!canSubmit || !bank) return;
-    setLoading(true);
+  async function save() {
+    if (!canSave || !bank || !resolvedName) return;
+    setSaving(true);
     setStatus(null);
     try {
-      const res = await api.withdraw({
-        amountNgn: Number(amount),
-        accountNumber,
-        bankName: bank.name,
-        bankCode: bank.code,
-        accountName: resolvedName || undefined,
-        narration: narration || undefined,
-      });
-      setStatus(res.message);
+      await api.savePayoutAccount({ bankCode: bank.code, bankName: bank.name, accountNumber, accountName: resolvedName });
+      await refreshUser();
+      setStatus('Payment details saved.');
       setStatusOk(true);
-      setAmount('');
+      setEditing(false);
       setAccountNumber('');
       setBank(null);
       setResolvedName(null);
-      setNarration('');
     } catch (e: any) {
       setStatus(e.message);
       setStatusOk(false);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
-  function submit() {
-    if (!canSubmit || !bank) return;
-    Alert.alert(
-      'Confirm withdrawal',
-      `Withdraw ₦${Number(amount).toLocaleString()} to:\n${resolvedName}\n${bank.name} · ${accountNumber}\n\nThis can't be undone once approved.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm', onPress: doSubmit },
-      ],
+  if (!editing && user?.payoutAccountNumber) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Payment Details" onBack={onBack} colors={colors} />
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+          <Text style={styles.hint}>
+            This is the bank account gift card sales and other payouts are sent to.
+          </Text>
+          <View style={styles.savedCard}>
+            <View style={styles.savedIcon}>
+              <Text style={styles.savedIconText}>🏦</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.savedName}>{user.payoutAccountName}</Text>
+              <Text style={styles.savedBank}>{user.payoutBankName}</Text>
+              <Text style={styles.savedNumber}>{user.payoutAccountNumber}</Text>
+            </View>
+          </View>
+          {status && <Text style={[styles.status, statusOk ? styles.statusOk : styles.statusError]}>{status}</Text>}
+          <TouchableOpacity style={styles.cta} onPress={() => setEditing(true)}>
+            <Text style={styles.ctaText}>Change Account</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
     );
   }
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Withdraw Naira" onBack={onBack} colors={colors} />
+      <ScreenHeader title="Payment Details" onBack={onBack} colors={colors} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-        <View style={styles.balanceRow}>
-          <View style={styles.balanceIcon}>
-            <Text style={styles.balanceIconText}>₦</Text>
-          </View>
-          <View>
-            <Text style={styles.balanceAmount}>
-              ₦{(user?.walletBalanceNgn ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </Text>
-            {currency !== 'NGN' && (
-              <Text style={styles.balanceConverted}>≈ {formatNgn(user?.walletBalanceNgn ?? 0)}</Text>
-            )}
-            <Text style={styles.balanceLabel}>NGN Balance</Text>
-          </View>
-        </View>
-
-        {limits && (
-          <Text style={styles.limitsNote}>
-            Withdrawal limits: ₦{limits.min_withdrawal_ngn.toLocaleString()} – ₦{limits.max_withdrawal_ngn.toLocaleString()}
-            {currency !== 'NGN' && ` (${formatNgn(limits.min_withdrawal_ngn)} – ${formatNgn(limits.max_withdrawal_ngn)})`}
-          </Text>
-        )}
-        {currency !== 'NGN' && (
-          <Text style={styles.limitsNote}>Withdrawals are always paid out in Nigerian Naira to your bank account.</Text>
-        )}
-
-        <View style={styles.field}>
-          <TextInput
-            style={styles.amountInput}
-            value={amount}
-            onChangeText={setAmount}
-            placeholder="Enter Amount"
-            placeholderTextColor={colors.muted}
-            keyboardType="decimal-pad"
-          />
-          <TouchableOpacity style={styles.maxBtn} onPress={() => setAmount(String(user?.walletBalanceNgn ?? 0))}>
-            <Text style={styles.maxBtnText}>Max</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.hint}>
+          Add the bank account you want to be paid into — this is used for gift card sales and can speed up withdrawals too.
+        </Text>
 
         <TouchableOpacity style={styles.fieldSimple} onPress={() => setBankModalVisible(true)}>
           <Text style={bank ? styles.pickerValue : styles.pickerPlaceholder}>{bank ? bank.name : 'Select Bank'}</Text>
@@ -195,38 +146,18 @@ export default function WithdrawScreen({
           </View>
         )}
 
-        <View style={styles.fieldSimple}>
-          <TextInput
-            style={styles.input}
-            value={narration}
-            onChangeText={setNarration}
-            placeholder="Add Narration (optional)"
-            placeholderTextColor={colors.muted}
-          />
-        </View>
-
         {status && <Text style={[styles.status, statusOk ? styles.statusOk : styles.statusError]}>{status}</Text>}
 
-        <Text style={styles.savedHead}>SAVED ACCOUNT</Text>
-        {user?.payoutAccountNumber ? (
-          <TouchableOpacity style={styles.savedRow} onPress={useSavedAccount}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.savedName}>{user.payoutAccountName}</Text>
-              <Text style={styles.savedDetail}>{user.payoutBankName} · {user.payoutAccountNumber}</Text>
-            </View>
-            <Text style={styles.savedUse}>Use →</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.savedEmpty} onPress={() => onNavigate('payment')}>
-            <Text style={styles.empty}>No saved account yet</Text>
-            <Text style={styles.savedUse}>Add one in Payment Details →</Text>
+        {user?.payoutAccountNumber && (
+          <TouchableOpacity style={styles.cancelLink} onPress={() => { setEditing(false); setStatus(null); }}>
+            <Text style={styles.cancelLinkText}>Cancel</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={[styles.cta, (!canSubmit || loading) && { opacity: 0.5 }]} onPress={submit} disabled={!canSubmit || loading}>
-          <Text style={styles.ctaText}>{loading ? 'Submitting…' : 'Withdraw'}</Text>
+        <TouchableOpacity style={[styles.cta, (!canSave || saving) && { opacity: 0.5 }]} onPress={save} disabled={!canSave || saving}>
+          <Text style={styles.ctaText}>{saving ? 'Saving…' : 'Save Payment Details'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -276,17 +207,13 @@ function getStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
     content: { padding: spacing.lg, paddingBottom: spacing.xxl },
-    balanceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
-    balanceIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface2, borderWidth: 2, borderColor: colors.jade, alignItems: 'center', justifyContent: 'center' },
-    balanceIconText: { color: colors.jade, fontWeight: '700', fontSize: 16 },
-    balanceAmount: { color: colors.ink, fontSize: 22, fontWeight: '700' },
-    balanceConverted: { color: colors.muted, fontSize: 12, marginTop: 1 },
-    balanceLabel: { color: colors.muted, fontSize: 11, marginTop: 2 },
-    limitsNote: { color: colors.muted, fontSize: 11, marginBottom: spacing.lg },
-    field: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
-    amountInput: { flex: 1, color: colors.ink, fontSize: 16, paddingVertical: spacing.lg },
-    maxBtn: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
-    maxBtnText: { color: colors.ink, fontSize: 12, fontWeight: '700' },
+    hint: { color: colors.muted, fontSize: 12.5, lineHeight: 18, marginBottom: spacing.lg },
+    savedCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.lg },
+    savedIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
+    savedIconText: { fontSize: 20 },
+    savedName: { color: colors.ink, fontSize: 15, fontWeight: '700' },
+    savedBank: { color: colors.muted, fontSize: 12.5, marginTop: 2 },
+    savedNumber: { color: colors.muted, fontSize: 12.5, marginTop: 1 },
     fieldSimple: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: spacing.lg, marginBottom: spacing.sm, justifyContent: 'center', minHeight: 52 },
     input: { color: colors.ink, fontSize: 15, paddingVertical: spacing.lg },
     pickerValue: { color: colors.ink, fontSize: 15, fontWeight: '600' },
@@ -298,13 +225,9 @@ function getStyles(colors: ThemeColors) {
     status: { fontSize: 12, marginTop: spacing.sm, marginBottom: spacing.sm },
     statusOk: { color: colors.jade },
     statusError: { color: colors.ember },
-    savedHead: { color: colors.muted, fontSize: 11, letterSpacing: 0.5, marginTop: spacing.xl, marginBottom: spacing.sm },
-    empty: { color: colors.muted, fontSize: 12 },
-    savedRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.lg },
-    savedName: { color: colors.ink, fontSize: 13.5, fontWeight: '700' },
-    savedDetail: { color: colors.muted, fontSize: 11.5, marginTop: 2 },
-    savedUse: { color: colors.signal, fontSize: 12, fontWeight: '700' },
-    savedEmpty: { alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.lg },
+    cancelLink: { alignItems: 'center', paddingVertical: spacing.md },
+    cancelLinkText: { color: colors.muted, fontSize: 13, fontWeight: '600' },
+    empty: { color: colors.muted, fontSize: 12, textAlign: 'center', paddingVertical: spacing.xl },
     footer: { padding: spacing.lg, borderTopWidth: 1, borderTopColor: colors.line },
     cta: { backgroundColor: colors.signal, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center' },
     ctaText: { color: colors.signalInk, fontWeight: '700', fontSize: 15 },

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -24,19 +24,34 @@ export default function BillsScreen({ onBack, colors }: { onBack: () => void; co
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState<string | null>(null);
+  const [statusOk, setStatusOk] = useState(false);
 
-  async function submit() {
+  async function doSubmit() {
     if (!recipient || !amount) return;
     setStatus(null);
     try {
       await api.addTransaction({ type: 'bill', title: selected, subtitle: recipient, amountNgn: -Number(amount) });
       await refreshUser();
       setStatus(`${selected} payment of ₦${amount} submitted — awaiting admin approval.`);
+      setStatusOk(true);
       setRecipient('');
       setAmount('');
     } catch (e: any) {
       setStatus(e.message);
+      setStatusOk(false);
     }
+  }
+
+  function submit() {
+    if (!recipient || !amount) return;
+    Alert.alert(
+      `Confirm ${selected} payment`,
+      `Pay ₦${Number(amount).toLocaleString()} for ${recipient}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm', onPress: doSubmit },
+      ],
+    );
   }
 
   return (
@@ -63,7 +78,7 @@ export default function BillsScreen({ onBack, colors }: { onBack: () => void; co
           <TextInput style={styles.input} value={amount} onChangeText={setAmount} placeholder="0.00" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
         </View>
 
-        {status && <Text style={styles.status}>{status}</Text>}
+        {status && <Text style={[styles.status, statusOk ? styles.statusOk : styles.statusError]}>{status}</Text>}
 
         <TouchableOpacity style={styles.cta} onPress={submit} disabled={!recipient || !amount}>
           <Text style={styles.ctaText}>Pay {selected}</Text>
@@ -84,7 +99,9 @@ function getStyles(colors: ThemeColors) {
     field: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.sm },
     flabel: { color: colors.muted, fontSize: 10, letterSpacing: 0.5 },
     input: { color: colors.ink, fontSize: 16, fontWeight: '600', marginTop: spacing.xs, padding: 0 },
-    status: { color: colors.jade, fontSize: 12, marginTop: spacing.sm, marginBottom: spacing.sm },
+    status: { fontSize: 12, marginTop: spacing.sm, marginBottom: spacing.sm },
+    statusOk: { color: colors.jade },
+    statusError: { color: colors.ember },
     cta: { backgroundColor: colors.signal, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center', marginTop: spacing.md },
     ctaText: { color: colors.signalInk, fontWeight: '700', fontSize: 14 },
   });
