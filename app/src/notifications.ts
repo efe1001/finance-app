@@ -2,10 +2,20 @@ import { Alert } from 'react-native';
 import {
   getMessaging,
   requestPermission,
+  hasPermission,
   getToken,
   onMessage,
   AuthorizationStatus,
 } from '@react-native-firebase/messaging';
+
+// True only if the user has never been asked before (Android's default before
+// the first request, and iOS before its one-shot system prompt) — lets the
+// caller decide whether to show a branded explanation first, without ever
+// re-prompting someone who already said yes or no.
+export async function isPushPermissionUndetermined() {
+  const status = await hasPermission(getMessaging());
+  return status === AuthorizationStatus.NOT_DETERMINED;
+}
 
 export async function initPushNotifications(onToken: (token: string) => void) {
   const messaging = getMessaging();

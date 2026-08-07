@@ -7,7 +7,7 @@ import { CurrencyProvider } from './src/currency/CurrencyContext';
 import { BalanceVisibilityProvider } from './src/wallet/BalanceVisibilityContext';
 import { AppLockProvider, useAppLock } from './src/security/AppLockContext';
 import { RefreshProvider } from './src/data/RefreshContext';
-import { initPushNotifications } from './src/notifications';
+import { initPushNotifications, isPushPermissionUndetermined } from './src/notifications';
 import { initCrashReporting, identifyCrashUser } from './src/crashReporting';
 import { checkForUpdate, UpdateInfo } from './src/updateCheck';
 import { api } from './src/api/client';
@@ -96,10 +96,11 @@ function requestPush() {
 }
 
 function Root() {
-  const { user, justRegistered, clearJustRegistered } = useAuth();
+  const { user } = useAuth();
   const { colors, mode } = useTheme();
   const { enabled, locked } = useAppLock();
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
   useEffect(() => {
     initCrashReporting();
@@ -109,17 +110,19 @@ function Root() {
     if (!user) return;
     identifyCrashUser(user.id);
     checkForUpdate().then(setUpdate);
-    // Returning users get the quiet auto-request they've always had; a brand new
-    // account gets the friendly prompt below instead. This must only evaluate
-    // justRegistered at the moment `user` changes (login/register), not every
-    // time it later flips to false when the prompt is dismissed/actioned.
-    if (!justRegistered) requestPush();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only show the branded ask (or request at all) if this device has never
+    // been asked before — covers both new signups and existing users who
+    // updated from a version where the permission was silently broken,
+    // without ever re-nagging someone who already said yes or no.
+    isPushPermissionUndetermined().then(undetermined => {
+      if (undetermined) setShowNotifPrompt(true);
+      else requestPush();
+    });
   }, [user]);
 
   function enableNotifications() {
     requestPush();
-    clearJustRegistered();
+    setShowNotifPrompt(false);
   }
 
   return (
@@ -137,9 +140,9 @@ function Root() {
       <UpdateModal update={update} onDismiss={() => setUpdate(null)} colors={colors} />
       {user && (
         <NotificationPromptModal
-          visible={justRegistered}
+          visible={showNotifPrompt}
           onEnable={enableNotifications}
-          onDismiss={clearJustRegistered}
+          onDismiss={() => setShowNotifPrompt(false)}
           colors={colors}
         />
       )}
