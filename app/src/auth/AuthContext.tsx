@@ -10,6 +10,7 @@ type User = {
   referralCode: string;
   ninStatus: string;
   country: string | null;
+  phone: string | null;
   payoutBankCode: string | null;
   payoutBankName: string | null;
   payoutAccountNumber: string | null;
@@ -21,7 +22,7 @@ type AuthContextValue = {
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<User>;
-  register: (name: string, email: string, password: string, referralCode?: string, country?: string) => Promise<void>;
+  register: (name: string, email: string, password: string, phone: string, referralCode?: string, country?: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 };
@@ -49,11 +50,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string, referralCode?: string, country?: string) => {
+  const register = useCallback(async (name: string, email: string, password: string, phone: string, referralCode?: string, country?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.register(name, email, password, referralCode, country);
+      const res = await api.register(name, email, password, phone, referralCode, country);
       setAuthToken(res.token);
       setUser(res.user);
     } catch (e: any) {

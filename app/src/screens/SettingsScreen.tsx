@@ -236,6 +236,7 @@ function ProfileScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
   const styles = getStyles(colors);
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
+  const [phone, setPhone] = useState(user?.phone ?? '');
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [statusOk, setStatusOk] = useState(false);
@@ -244,7 +245,7 @@ function ProfileScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
     setSaving(true);
     setStatus(null);
     try {
-      await api.updateProfile({ name, email });
+      await api.updateProfile({ name, email, phone });
       await refreshUser();
       setStatus('Profile updated.');
       setStatusOk(true);
@@ -267,6 +268,17 @@ function ProfileScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
         <View style={styles.field}>
           <Text style={styles.flabel}>EMAIL</Text>
           <TextInput style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholderTextColor={colors.muted} />
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.flabel}>PHONE NUMBER</Text>
+          <TextInput
+            style={styles.input}
+            value={phone}
+            onChangeText={t => setPhone(t.replace(/[^0-9+]/g, ''))}
+            keyboardType="phone-pad"
+            placeholder="e.g. 08012345678"
+            placeholderTextColor={colors.muted}
+          />
         </View>
         {status && <Text style={[styles.status, statusOk ? styles.statusOk : styles.statusError]}>{status}</Text>}
         <TouchableOpacity style={styles.cta} onPress={save} disabled={saving}>

@@ -33,6 +33,7 @@ function publicUser(user) {
     referralCode: user.referral_code,
     ninStatus: user.nin_status,
     country: user.country,
+    phone: user.phone,
     payoutBankCode: user.payout_bank_code,
     payoutBankName: user.payout_bank_name,
     payoutAccountNumber: user.payout_account_number,
@@ -41,9 +42,9 @@ function publicUser(user) {
 }
 
 router.post('/register', authLimiter, async (req, res) => {
-  const { name, email, password, referralCode, country } = req.body;
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'name, email and password are required' });
+  const { name, email, password, referralCode, country, phone } = req.body;
+  if (!name || !email || !password || !phone) {
+    return res.status(400).json({ error: 'name, email, password and phone are required' });
   }
   if (password.length < 6) {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
@@ -62,8 +63,8 @@ router.post('/register', authLimiter, async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const { rows } = await pool.query(
-    'INSERT INTO users (name, email, password_hash, wallet_balance_ngn, referred_by, country) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-    [name, email, passwordHash, 0, referrer?.id || null, country || null],
+    'INSERT INTO users (name, email, password_hash, wallet_balance_ngn, referred_by, country, phone) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+    [name, email, passwordHash, 0, referrer?.id || null, country || null, phone],
   );
 
   let user = rows[0];
@@ -112,8 +113,8 @@ router.get('/me', requireAuth, async (req, res) => {
 });
 
 router.put('/profile', requireAuth, async (req, res) => {
-  const { name, email } = req.body;
-  if (!name && !email) return res.status(400).json({ error: 'name or email is required' });
+  const { name, email, phone } = req.body;
+  if (!name && !email && !phone) return res.status(400).json({ error: 'name, email or phone is required' });
 
   if (email) {
     const existing = await pool.query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, req.user.id]);
@@ -121,8 +122,8 @@ router.put('/profile', requireAuth, async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    'UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email) WHERE id = $3 RETURNING *',
-    [name || null, email || null, req.user.id],
+    'UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email), phone = COALESCE($3, phone) WHERE id = $4 RETURNING *',
+    [name || null, email || null, phone || null, req.user.id],
   );
   res.json(publicUser(rows[0]));
 });

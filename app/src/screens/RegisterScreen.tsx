@@ -22,6 +22,7 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
   const styles = getStyles(colors);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [reveal, setReveal] = useState(false);
@@ -30,11 +31,11 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
   const [countryModalOpen, setCountryModalOpen] = useState(false);
 
   const mismatch = password.length > 0 && confirmPassword.length > 0 && password !== confirmPassword;
-  const canSubmit = !!name && !!email && password.length >= 6 && password === confirmPassword;
+  const canSubmit = !!name && !!email && !!phone && password.length >= 6 && password === confirmPassword;
 
   async function submit() {
     if (!canSubmit) return;
-    await register(name, email, password, referralCode, country?.name);
+    await register(name, email, password, phone, referralCode, country?.name);
     if (country) setCurrency(country.currency);
   }
 
@@ -60,6 +61,18 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
             placeholderTextColor={colors.muted}
             autoCapitalize="none"
             keyboardType="email-address"
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>PHONE NUMBER</Text>
+          <TextInput
+            style={styles.input}
+            value={phone}
+            onChangeText={t => setPhone(t.replace(/[^0-9+]/g, ''))}
+            placeholder="e.g. 08012345678"
+            placeholderTextColor={colors.muted}
+            keyboardType="phone-pad"
           />
         </View>
 
