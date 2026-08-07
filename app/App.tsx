@@ -5,8 +5,11 @@ import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { CurrencyProvider } from './src/currency/CurrencyContext';
 import { BalanceVisibilityProvider } from './src/wallet/BalanceVisibilityContext';
+import { AppLockProvider, useAppLock } from './src/security/AppLockContext';
 import { initPushNotifications } from './src/notifications';
+import { initCrashReporting, identifyCrashUser } from './src/crashReporting';
 import { api } from './src/api/client';
+import LockScreen from './src/screens/LockScreen';
 
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
@@ -83,9 +86,15 @@ function MainShell() {
 function Root() {
   const { user } = useAuth();
   const { colors, mode } = useTheme();
+  const { enabled, locked } = useAppLock();
+
+  useEffect(() => {
+    initCrashReporting();
+  }, []);
 
   useEffect(() => {
     if (!user) return;
+    identifyCrashUser(user.id);
     initPushNotifications(token => {
       api.saveFcmToken(token).catch(() => {});
     });
@@ -94,7 +103,15 @@ function Root() {
   return (
     <>
       <StatusBar barStyle={mode === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.bg} />
-      {!user ? <AuthGate /> : user.isAdmin ? <AdminDashboardScreen /> : <MainShell />}
+      {!user ? (
+        <AuthGate />
+      ) : enabled && locked ? (
+        <LockScreen colors={colors} />
+      ) : user.isAdmin ? (
+        <AdminDashboardScreen />
+      ) : (
+        <MainShell />
+      )}
     </>
   );
 }
@@ -105,9 +122,11 @@ function App() {
       <ThemeProvider>
         <CurrencyProvider>
           <BalanceVisibilityProvider>
-            <AuthProvider>
-              <Root />
-            </AuthProvider>
+            <AppLockProvider>
+              <AuthProvider>
+                <Root />
+              </AuthProvider>
+            </AppLockProvider>
           </BalanceVisibilityProvider>
         </CurrencyProvider>
       </ThemeProvider>

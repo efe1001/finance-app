@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { useCurrency, CURRENCIES } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
+import { useAppLock } from '../security/AppLockContext';
 import ScreenHeader from '../components/ScreenHeader';
 
 type SubScreen =
@@ -76,8 +77,8 @@ function RootSettings({
   const { mode, toggleMode } = useTheme();
   const { currency } = useCurrency();
   const { balanceHidden, setBalanceHidden } = useBalanceVisibility();
+  const appLock = useAppLock();
   const styles = getStyles(colors);
-  const [biometrics, setBiometrics] = useState(false);
 
   return (
     <View style={styles.screen}>
@@ -113,9 +114,23 @@ function RootSettings({
           />
           <Row
             icon="☺"
-            label="Biometrics (coming soon)"
+            label={appLock.supported ? 'Biometric Lock' : 'Biometric Lock (unsupported on this device)'}
             colors={colors}
-            right={<Switch value={biometrics} onValueChange={setBiometrics} disabled trackColor={{ true: colors.signal, false: colors.line }} thumbColor="#fff" />}
+            right={
+              <Switch
+                value={appLock.enabled}
+                disabled={!appLock.supported}
+                onValueChange={async v => {
+                  if (v) {
+                    const ok = await appLock.unlock();
+                    if (!ok) return;
+                  }
+                  appLock.setEnabled(v);
+                }}
+                trackColor={{ true: colors.signal, false: colors.line }}
+                thumbColor="#fff"
+              />
+            }
           />
           <Row
             icon="$"
