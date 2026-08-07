@@ -34,8 +34,10 @@ type CurrencyContextValue = {
   setCurrency: (c: Currency) => void;
   symbol: string;
   fromUsd: (usd: number) => number;
+  toUsd: (amountInCurrency: number) => number;
   format: (usd: number, opts?: { maximumFractionDigits?: number }) => string;
   fromNgn: (ngn: number) => number;
+  toNgn: (amountInCurrency: number) => number;
   formatNgn: (ngn: number, opts?: { maximumFractionDigits?: number }) => string;
 };
 
@@ -47,16 +49,18 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<CurrencyContextValue>(() => {
     const meta = CURRENCIES.find(c => c.code === currency) ?? CURRENCIES[0];
     const fromUsd = (usd: number) => usd * meta.perUsd;
+    const toUsd = (amountInCurrency: number) => amountInCurrency / meta.perUsd;
     const format = (usd: number, opts?: { maximumFractionDigits?: number }) =>
       `${meta.symbol}${fromUsd(usd).toLocaleString(undefined, {
         maximumFractionDigits: opts?.maximumFractionDigits ?? 2,
       })}`;
     const fromNgn = (ngn: number) => (ngn / NGN_PER_USD) * meta.perUsd;
+    const toNgn = (amountInCurrency: number) => (amountInCurrency / meta.perUsd) * NGN_PER_USD;
     const formatNgn = (ngn: number, opts?: { maximumFractionDigits?: number }) =>
       `${meta.symbol}${fromNgn(ngn).toLocaleString(undefined, {
         maximumFractionDigits: opts?.maximumFractionDigits ?? 2,
       })}`;
-    return { currency, setCurrency, symbol: meta.symbol, fromUsd, format, fromNgn, formatNgn };
+    return { currency, setCurrency, symbol: meta.symbol, fromUsd, toUsd, format, fromNgn, toNgn, formatNgn };
   }, [currency]);
 
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;

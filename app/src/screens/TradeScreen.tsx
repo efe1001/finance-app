@@ -5,9 +5,12 @@ import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useCurrency } from '../currency/CurrencyContext';
+import type { ScreenKey } from '../components/Drawer';
 import ScreenHeader from '../components/ScreenHeader';
+import IconBadge from '../components/IconBadge';
 
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
+const NGN_PER_USD = 1631;
 
 function readFileAsBase64(uri: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -37,16 +40,26 @@ const ASSETS = [
   { id: 'dogecoin', symbol: 'DOGE' },
 ];
 
-export default function TradeScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors }) {
+export default function TradeScreen({
+  onBack,
+  onNavigate,
+  colors,
+}: {
+  onBack: () => void;
+  onNavigate: (key: ScreenKey) => void;
+  colors: ThemeColors;
+}) {
   const { user, refreshUser } = useAuth();
-  const { formatNgn } = useCurrency();
+  const { currency, fromUsd, toUsd, fromNgn, format, formatNgn } = useCurrency();
   const styles = getStyles(colors);
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [assetIdx, setAssetIdx] = useState(0);
   const [prices, setPrices] = useState<Record<string, { usd: number }>>({});
+  const [holdings, setHoldings] = useState<Record<string, number>>({});
   const [platformWallets, setPlatformWallets] = useState<{ asset: string; address: string }[]>([]);
   const [loading, setLoading] = useState(false);
-  const [amountUsd, setAmountUsd] = useState('');
+  const [inputMode, setInputMode] = useState<'currency' | 'crypto'>('currency');
+  const [inputValue, setInputValue] = useState('');
   const [myAddress, setMyAddress] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [addressCopied, setAddressCopied] = useState(false);
@@ -72,19 +85,23 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
 
   const asset = ASSETS[assetIdx];
   const priceUsd = prices[asset.id]?.usd ?? 0;
-  const NGN_PER_USD = 1631;
   const priceNgn = priceUsd * NGN_PER_USD;
+  const heldQty = holdings[asset.symbol] ?? 0;
   const platformAddress = platformWallets.find(w => w.asset === asset.symbol)?.address || '';
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [p, w] = await Promise.all([
+      const [p, w, h] = await Promise.all([
         api.cryptoPrices(ASSETS.map(a => a.id).join(',')),
         api.platformWallets().catch(() => []),
+        api.holdings().catch(() => []),
       ]);
       setPrices(p);
       setPlatformWallets(w);
+      const map: Record<string, number> = {};
+      (h as { asset: string; amount: number }[]).forEach(x => (map[x.asset] = Number(x.amount)));
+      setHoldings(map);
     } catch (e) {
       // best-effort; keep last known prices
     } finally {
@@ -96,10 +113,43 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
     load();
   }, [load]);
 
-  const receiveNgn = (parseFloat(amountUsd || '0') * priceNgn).toFixed(2);
-  const qty = priceUsd ? parseFloat(amountUsd || '0') / priceUsd : 0;
-  const insufficientBalance = side === 'buy' && !!amountUsd && Number(receiveNgn) > (user?.walletBalanceNgn ?? 0);
-  const canSubmit = side === 'buy' ? !!amountUsd && !!myAddress && !insufficientBalance : !!amountUsd;
+  // A qty typed in one asset/mode doesn't carry meaning after switching either,
+  // so start fresh rather than leave a stale, misleading number in the field.
+  useEffect(() => {
+    setInputValue('');
+  }, [assetIdx, side]);
+
+  // The crypto quantity being traded — the single source of truth everything
+  // else (NGN amount, previews, limits) derives from, regardless of which unit
+  // the user is typing in.
+  const qty = (() => {
+    const n = parseFloat(inputValue || '0');
+    if (!n) return 0;
+    if (inputMode === 'crypto') return n;
+    return priceUsd ? toUsd(n) / priceUsd : 0;
+  })();
+  const amountNgn = qty * priceNgn;
+
+  const insufficientBalance = side === 'buy' && qty > 0 && amountNgn > (user?.walletBalanceNgn ?? 0);
+  const lowHoldings = side === 'sell' && qty > 0 && qty > heldQty;
+  const canSubmit = side === 'buy' ? qty > 0 && !!myAddress && !insufficientBalance : qty > 0;
+
+  function switchMode(mode: 'currency' | 'crypto') {
+    if (mode === inputMode) return;
+    if (qty > 0) {
+      setInputValue(mode === 'crypto' ? qty.toFixed(8) : fromUsd(qty * priceUsd).toFixed(2));
+    }
+    setInputMode(mode);
+  }
+
+  function useMax() {
+    if (side === 'buy') {
+      const maxQty = priceNgn > 0 ? (user?.walletBalanceNgn ?? 0) / priceNgn : 0;
+      setInputValue(inputMode === 'crypto' ? maxQty.toFixed(8) : fromNgn(user?.walletBalanceNgn ?? 0).toFixed(2));
+    } else {
+      setInputValue(inputMode === 'crypto' ? heldQty.toString() : fromUsd(heldQty * priceUsd).toFixed(2));
+    }
+  }
 
   function copyAddress() {
     if (!platformAddress) return;
@@ -140,7 +190,7 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
           side === 'buy'
             ? `${qty.toFixed(6)} ${asset.symbol} → sent to ${myAddress}`
             : `${qty.toFixed(6)} ${asset.symbol} sent to our ${asset.symbol} address`,
-        amountNgn: side === 'buy' ? -Number(receiveNgn) : Number(receiveNgn),
+        amountNgn: side === 'buy' ? -amountNgn : amountNgn,
         address: side === 'buy' ? myAddress : platformAddress,
         asset: asset.symbol,
         qty,
@@ -148,10 +198,10 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
         receiptMime: receipt?.type ?? undefined,
         receiptFilename: receipt?.name ?? undefined,
       });
-      await refreshUser();
+      await Promise.all([refreshUser(), load()]);
       setStatus('Order submitted — awaiting admin confirmation.');
       setReceipt(null);
-      setAmountUsd('');
+      setInputValue('');
       setMyAddress('');
     } catch (e: any) {
       setStatus(e.message);
@@ -167,6 +217,27 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
+        <View style={styles.balanceCard}>
+          <Text style={styles.balanceLabel}>WALLET BALANCE</Text>
+          <Text style={styles.balanceAmount}>{formatNgn(user?.walletBalanceNgn ?? 0)}</Text>
+          <Text style={styles.balanceHint}>Your crypto — tap one to trade it</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+            {ASSETS.map((a, idx) => {
+              const qtyHeld = holdings[a.symbol] ?? 0;
+              const valueUsd = qtyHeld * (prices[a.id]?.usd ?? 0);
+              return (
+                <TouchableOpacity key={a.id} style={[styles.holdingChip, idx === assetIdx && styles.holdingChipOn]} onPress={() => setAssetIdx(idx)}>
+                  <IconBadge name={a.id} size={26} glyphSize={13} />
+                  <View>
+                    <Text style={styles.holdingSymbol}>{a.symbol}</Text>
+                    <Text style={styles.holdingValue}>{qtyHeld > 0 ? format(valueUsd) : '—'}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
         <View style={styles.seg}>
           <TouchableOpacity style={[styles.segItem, side === 'buy' && styles.segItemOn]} onPress={() => setSide('buy')}>
             <Text style={[styles.segText, side === 'buy' && styles.segTextOn]}>Buy</Text>
@@ -180,25 +251,50 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
           {ASSETS.map((a, idx) => (
             <TouchableOpacity key={a.id} style={[styles.assetChip, idx === assetIdx && styles.assetChipOn]} onPress={() => setAssetIdx(idx)}>
               <Text style={[styles.assetChipText, idx === assetIdx && styles.assetChipTextOn]}>{a.symbol}</Text>
+              {(holdings[a.symbol] ?? 0) > 0 && <View style={styles.ownedDot} />}
             </TouchableOpacity>
           ))}
         </ScrollView>
 
         <View style={styles.priceCard}>
-          <Text style={styles.priceLabel}>{asset.symbol} / NGN</Text>
-          <Text style={styles.price}>{priceNgn ? formatNgn(priceNgn, { maximumFractionDigits: 0 }) : 'Loading…'}</Text>
+          <Text style={styles.priceLabel}>{asset.symbol} / {currency}</Text>
+          <Text style={styles.price}>{priceUsd ? format(priceUsd, { maximumFractionDigits: priceUsd > 100 ? 0 : 2 }) : 'Loading…'}</Text>
+          {side === 'sell' && <Text style={styles.priceSub}>You hold {heldQty.toFixed(6)} {asset.symbol}</Text>}
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.flabel}>YOU {side === 'buy' ? 'PAY (USD)' : 'SELL (USD VALUE)'}</Text>
-          <TextInput style={styles.input} value={amountUsd} onChangeText={setAmountUsd} placeholder="0.00" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
+          <View style={styles.fieldHead}>
+            <Text style={styles.flabel}>YOU {side === 'buy' ? 'PAY' : 'SELL'}</Text>
+            <View style={styles.modeSeg}>
+              <TouchableOpacity style={[styles.modeChip, inputMode === 'currency' && styles.modeChipOn]} onPress={() => switchMode('currency')}>
+                <Text style={[styles.modeChipText, inputMode === 'currency' && styles.modeChipTextOn]}>{currency}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modeChip, inputMode === 'crypto' && styles.modeChipOn]} onPress={() => switchMode('crypto')}>
+                <Text style={[styles.modeChipText, inputMode === 'crypto' && styles.modeChipTextOn]}>{asset.symbol}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              value={inputValue}
+              onChangeText={setInputValue}
+              placeholder="0.00"
+              placeholderTextColor={colors.muted}
+              keyboardType="decimal-pad"
+            />
+            <TouchableOpacity style={styles.maxBtn} onPress={useMax}>
+              <Text style={styles.maxBtnText}>Max</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.field}>
           <Text style={styles.flabel}>{side === 'buy' ? 'YOU RECEIVE' : 'YOU GET PAID'}</Text>
           <Text style={styles.fval}>
-            {side === 'buy' ? `${qty.toFixed(6)} ${asset.symbol}` : formatNgn(Number(receiveNgn))}
+            {inputMode === 'currency' ? `${qty.toFixed(6)} ${asset.symbol}` : formatNgn(amountNgn)}
           </Text>
+          {inputMode === 'crypto' && <Text style={styles.fsub}>{qty.toFixed(6)} {asset.symbol}</Text>}
         </View>
 
         {side === 'buy' ? (
@@ -208,9 +304,15 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
               <TextInput style={styles.input} value={myAddress} onChangeText={setMyAddress} placeholder={`Paste your ${asset.symbol} address`} placeholderTextColor={colors.muted} autoCapitalize="none" />
             </View>
             {insufficientBalance && (
-              <Text style={styles.insufficientText}>
-                Insufficient balance — you have {formatNgn(user?.walletBalanceNgn ?? 0)}, this order needs {formatNgn(Number(receiveNgn))}.
-              </Text>
+              <View style={styles.insufficientBox}>
+                <Text style={styles.insufficientTitle}>Insufficient balance</Text>
+                <Text style={styles.insufficientText}>
+                  You have {formatNgn(user?.walletBalanceNgn ?? 0)}, this order needs {formatNgn(amountNgn)}. Please top up to continue.
+                </Text>
+                <TouchableOpacity style={styles.topUpBtn} onPress={() => onNavigate('deposit')}>
+                  <Text style={styles.topUpBtnText}>Top Up →</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </>
         ) : (
@@ -227,6 +329,11 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
               )}
             </View>
             <Text style={styles.fsub}>After sending, submit below so an admin can confirm and pay you out.</Text>
+            {lowHoldings && (
+              <Text style={styles.holdingsNote}>
+                You only have {heldQty.toFixed(6)} {asset.symbol} on record here — that's fine if you're sending from elsewhere.
+              </Text>
+            )}
           </View>
         )}
 
@@ -264,30 +371,54 @@ function getStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
     content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+    balanceCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.lg },
+    balanceLabel: { color: colors.muted, fontSize: 10.5, letterSpacing: 1 },
+    balanceAmount: { color: colors.ink, fontSize: 24, fontWeight: '700', marginTop: spacing.xs },
+    balanceHint: { color: colors.muted, fontSize: 10.5, marginTop: spacing.md, marginBottom: spacing.sm },
+    holdingChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, backgroundColor: colors.surface2, borderRadius: radius.pill, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, borderWidth: 1, borderColor: 'transparent' },
+    holdingChipOn: { borderColor: colors.signal },
+    holdingSymbol: { color: colors.ink, fontSize: 11.5, fontWeight: '700' },
+    holdingValue: { color: colors.muted, fontSize: 9.5, marginTop: 1 },
     seg: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: radius.sm, padding: 4, marginBottom: spacing.lg },
     segItem: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: radius.sm - 2 },
     segItemOn: { backgroundColor: colors.signal },
     segText: { color: colors.muted, fontWeight: '700', fontSize: 13 },
     segTextOn: { color: colors.signalInk },
     assetRow: { flexDirection: 'row', marginBottom: spacing.lg, flexGrow: 0 },
-    assetChip: { paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+    assetChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
     assetChipOn: { backgroundColor: colors.signal, borderColor: 'transparent' },
     assetChipText: { color: colors.muted, fontWeight: '700', fontSize: 12 },
     assetChipTextOn: { color: colors.signalInk },
+    ownedDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.jade },
     priceCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: spacing.xl, marginBottom: spacing.lg },
     priceLabel: { color: colors.muted, fontSize: 12 },
     price: { color: colors.ink, fontSize: 28, fontWeight: '700', marginTop: spacing.sm },
+    priceSub: { color: colors.muted, fontSize: 11, marginTop: spacing.sm },
     field: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.sm },
+    fieldHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     flabel: { color: colors.muted, fontSize: 10, letterSpacing: 0.5 },
+    modeSeg: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: radius.pill, padding: 2, gap: 2 },
+    modeChip: { paddingVertical: 3, paddingHorizontal: spacing.sm, borderRadius: radius.pill },
+    modeChipOn: { backgroundColor: colors.signal },
+    modeChipText: { color: colors.muted, fontSize: 10, fontWeight: '700' },
+    modeChipTextOn: { color: colors.signalInk },
+    inputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     fval: { color: colors.ink, fontSize: 20, fontWeight: '700', marginTop: spacing.xs },
     fsub: { color: colors.muted, fontSize: 10.5, marginTop: spacing.sm, lineHeight: 15 },
-    input: { color: colors.ink, fontSize: 20, fontWeight: '700', marginTop: spacing.xs, padding: 0 },
+    input: { flex: 1, color: colors.ink, fontSize: 20, fontWeight: '700', marginTop: spacing.xs, padding: 0 },
+    maxBtn: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+    maxBtnText: { color: colors.ink, fontSize: 12, fontWeight: '700' },
     addressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
     addressText: { flex: 1, color: colors.signal, fontSize: 14, fontWeight: '700' },
     copyBtn: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
     copyBtnText: { color: colors.ink, fontSize: 11.5, fontWeight: '700' },
     status: { color: colors.jade, fontSize: 12, marginTop: spacing.sm, marginBottom: spacing.sm },
-    insufficientText: { color: colors.ember, fontSize: 12, marginTop: -spacing.xs, marginBottom: spacing.sm },
+    insufficientBox: { backgroundColor: 'rgba(226,96,77,0.1)', borderWidth: 1, borderColor: colors.ember, borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.sm },
+    insufficientTitle: { color: colors.ember, fontSize: 13, fontWeight: '700', marginBottom: 2 },
+    insufficientText: { color: colors.ember, fontSize: 12, lineHeight: 17 },
+    topUpBtn: { alignSelf: 'flex-start', marginTop: spacing.sm, backgroundColor: colors.ember, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
+    topUpBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+    holdingsNote: { color: colors.signal, fontSize: 10.5, marginTop: spacing.sm, lineHeight: 15 },
     attachBtn: { backgroundColor: colors.surface2, borderRadius: radius.sm, paddingVertical: spacing.md, alignItems: 'center', marginTop: spacing.xs },
     attachBtnText: { color: colors.ink, fontSize: 13, fontWeight: '600' },
     receiptRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface2, borderRadius: radius.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.md, marginTop: spacing.xs },

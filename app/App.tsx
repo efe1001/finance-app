@@ -57,7 +57,7 @@ function MainShell() {
       <View style={styles.body}>
         {screen === 'home' && <HomeScreen onOpenDrawer={() => setDrawerOpen(true)} onNavigate={navigate} />}
         {screen === 'wallet' && <WalletScreen onNavigate={navigate} colors={colors} />}
-        {screen === 'trade' && <TradeScreen onBack={goHome} colors={colors} />}
+        {screen === 'trade' && <TradeScreen onBack={goHome} onNavigate={navigate} colors={colors} />}
         {screen === 'p2p' && <P2PScreen onBack={goHome} colors={colors} />}
         {screen === 'giftcards' && <GiftCardsScreen onBack={goHome} colors={colors} />}
         {screen === 'bills' && <BillsScreen onBack={goHome} colors={colors} />}
