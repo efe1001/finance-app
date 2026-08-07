@@ -7,6 +7,9 @@ import { useTheme } from '../theme/ThemeContext';
 import { useCurrency, CURRENCIES } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import { useAppLock } from '../security/AppLockContext';
+import { APP_VERSION } from '../appVersion';
+import { checkForUpdate, UpdateInfo } from '../updateCheck';
+import UpdateModal from '../components/UpdateModal';
 import ScreenHeader from '../components/ScreenHeader';
 
 type SubScreen =
@@ -79,6 +82,21 @@ function RootSettings({
   const { balanceHidden, setBalanceHidden } = useBalanceVisibility();
   const appLock = useAppLock();
   const styles = getStyles(colors);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [checkedUpToDate, setCheckedUpToDate] = useState(false);
+
+  async function onCheckForUpdate() {
+    setCheckingUpdate(true);
+    setCheckedUpToDate(false);
+    try {
+      const result = await checkForUpdate();
+      if (result) setUpdate(result);
+      else setCheckedUpToDate(true);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }
 
   return (
     <View style={styles.screen}>
@@ -170,13 +188,22 @@ function RootSettings({
         <Text style={styles.sectionHead}>MORE</Text>
         <View style={styles.card}>
           <Row icon="▤" label="Legal" colors={colors} onPress={() => onGoTo('legal')} />
+          <Row
+            icon="⬆️"
+            label={checkingUpdate ? 'Checking…' : 'Check for Updates'}
+            colors={colors}
+            onPress={onCheckForUpdate}
+            right={checkedUpToDate ? <Text style={styles.rowValue}>Up to date ✓</Text> : undefined}
+          />
           <View style={{ borderBottomWidth: 0 }}>
             <Row icon="⎋" label="Logout" colors={colors} onPress={logout} danger />
           </View>
         </View>
 
-        <Text style={styles.version}>Version 1.0.0</Text>
+        <Text style={styles.version}>Version {APP_VERSION}</Text>
       </ScrollView>
+
+      <UpdateModal update={update} onDismiss={() => setUpdate(null)} colors={colors} />
     </View>
   );
 }

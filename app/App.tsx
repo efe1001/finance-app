@@ -8,8 +8,10 @@ import { BalanceVisibilityProvider } from './src/wallet/BalanceVisibilityContext
 import { AppLockProvider, useAppLock } from './src/security/AppLockContext';
 import { initPushNotifications } from './src/notifications';
 import { initCrashReporting, identifyCrashUser } from './src/crashReporting';
+import { checkForUpdate, UpdateInfo } from './src/updateCheck';
 import { api } from './src/api/client';
 import LockScreen from './src/screens/LockScreen';
+import UpdateModal from './src/components/UpdateModal';
 
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
@@ -87,6 +89,7 @@ function Root() {
   const { user } = useAuth();
   const { colors, mode } = useTheme();
   const { enabled, locked } = useAppLock();
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
 
   useEffect(() => {
     initCrashReporting();
@@ -98,6 +101,7 @@ function Root() {
     initPushNotifications(token => {
       api.saveFcmToken(token).catch(() => {});
     });
+    checkForUpdate().then(setUpdate);
   }, [user]);
 
   return (
@@ -112,6 +116,7 @@ function Root() {
       ) : (
         <MainShell />
       )}
+      <UpdateModal update={update} onDismiss={() => setUpdate(null)} colors={colors} />
     </>
   );
 }
