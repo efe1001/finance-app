@@ -4,6 +4,7 @@ import { pick, isErrorWithCode, errorCodes, types as pickerTypes, DocumentPicker
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { useCurrency } from '../currency/CurrencyContext';
 import ScreenHeader from '../components/ScreenHeader';
 
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
@@ -38,6 +39,7 @@ const ASSETS = [
 
 export default function TradeScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors }) {
   const { user, refreshUser } = useAuth();
+  const { formatNgn } = useCurrency();
   const styles = getStyles(colors);
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [assetIdx, setAssetIdx] = useState(0);
@@ -184,9 +186,7 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
 
         <View style={styles.priceCard}>
           <Text style={styles.priceLabel}>{asset.symbol} / NGN</Text>
-          <Text style={styles.price}>
-            {priceNgn ? `₦${priceNgn.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : 'Loading…'}
-          </Text>
+          <Text style={styles.price}>{priceNgn ? formatNgn(priceNgn, { maximumFractionDigits: 0 }) : 'Loading…'}</Text>
         </View>
 
         <View style={styles.field}>
@@ -197,7 +197,7 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
         <View style={styles.field}>
           <Text style={styles.flabel}>{side === 'buy' ? 'YOU RECEIVE' : 'YOU GET PAID'}</Text>
           <Text style={styles.fval}>
-            {side === 'buy' ? `${qty.toFixed(6)} ${asset.symbol}` : `₦${Number(receiveNgn).toLocaleString()}`}
+            {side === 'buy' ? `${qty.toFixed(6)} ${asset.symbol}` : formatNgn(Number(receiveNgn))}
           </Text>
         </View>
 
@@ -209,7 +209,7 @@ export default function TradeScreen({ onBack, colors }: { onBack: () => void; co
             </View>
             {insufficientBalance && (
               <Text style={styles.insufficientText}>
-                Insufficient balance — you have ₦{(user?.walletBalanceNgn ?? 0).toLocaleString()}, this order needs ₦{Number(receiveNgn).toLocaleString()}.
+                Insufficient balance — you have {formatNgn(user?.walletBalanceNgn ?? 0)}, this order needs {formatNgn(Number(receiveNgn))}.
               </Text>
             )}
           </>

@@ -14,12 +14,29 @@ export const CURRENCIES: { code: Currency; label: string; symbol: string; perUsd
   { code: 'ZAR', label: 'South African Rand', symbol: 'R', perUsd: 18.1 },
 ];
 
+const NGN_PER_USD = CURRENCIES.find(c => c.code === 'NGN')!.perUsd;
+
+export const COUNTRIES: { name: string; currency: Currency }[] = [
+  { name: 'Nigeria', currency: 'NGN' },
+  { name: 'United States', currency: 'USD' },
+  { name: 'United Kingdom', currency: 'GBP' },
+  { name: 'Ghana', currency: 'GHS' },
+  { name: 'Kenya', currency: 'KES' },
+  { name: 'South Africa', currency: 'ZAR' },
+  { name: 'Canada', currency: 'CAD' },
+  { name: 'Germany', currency: 'EUR' },
+  { name: 'France', currency: 'EUR' },
+  { name: 'Other', currency: 'USD' },
+];
+
 type CurrencyContextValue = {
   currency: Currency;
   setCurrency: (c: Currency) => void;
   symbol: string;
   fromUsd: (usd: number) => number;
   format: (usd: number, opts?: { maximumFractionDigits?: number }) => string;
+  fromNgn: (ngn: number) => number;
+  formatNgn: (ngn: number, opts?: { maximumFractionDigits?: number }) => string;
 };
 
 const CurrencyContext = createContext<CurrencyContextValue | null>(null);
@@ -34,7 +51,12 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
       `${meta.symbol}${fromUsd(usd).toLocaleString(undefined, {
         maximumFractionDigits: opts?.maximumFractionDigits ?? 2,
       })}`;
-    return { currency, setCurrency, symbol: meta.symbol, fromUsd, format };
+    const fromNgn = (ngn: number) => (ngn / NGN_PER_USD) * meta.perUsd;
+    const formatNgn = (ngn: number, opts?: { maximumFractionDigits?: number }) =>
+      `${meta.symbol}${fromNgn(ngn).toLocaleString(undefined, {
+        maximumFractionDigits: opts?.maximumFractionDigits ?? 2,
+      })}`;
+    return { currency, setCurrency, symbol: meta.symbol, fromUsd, format, fromNgn, formatNgn };
   }, [currency]);
 
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;

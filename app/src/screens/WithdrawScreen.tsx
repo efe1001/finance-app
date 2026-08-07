@@ -3,12 +3,14 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Modal,
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { useCurrency } from '../currency/CurrencyContext';
 import ScreenHeader from '../components/ScreenHeader';
 
 type Bank = { code: string; name: string };
 
 export default function WithdrawScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors }) {
   const { user } = useAuth();
+  const { currency, formatNgn } = useCurrency();
   const styles = getStyles(colors);
   const [limits, setLimits] = useState<{ min_withdrawal_ngn: number; max_withdrawal_ngn: number } | null>(null);
   const [amount, setAmount] = useState('');
@@ -97,6 +99,9 @@ export default function WithdrawScreen({ onBack, colors }: { onBack: () => void;
             <Text style={styles.balanceAmount}>
               ₦{(user?.walletBalanceNgn ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </Text>
+            {currency !== 'NGN' && (
+              <Text style={styles.balanceConverted}>≈ {formatNgn(user?.walletBalanceNgn ?? 0)}</Text>
+            )}
             <Text style={styles.balanceLabel}>NGN Balance</Text>
           </View>
         </View>
@@ -104,7 +109,11 @@ export default function WithdrawScreen({ onBack, colors }: { onBack: () => void;
         {limits && (
           <Text style={styles.limitsNote}>
             Withdrawal limits: ₦{limits.min_withdrawal_ngn.toLocaleString()} – ₦{limits.max_withdrawal_ngn.toLocaleString()}
+            {currency !== 'NGN' && ` (${formatNgn(limits.min_withdrawal_ngn)} – ${formatNgn(limits.max_withdrawal_ngn)})`}
           </Text>
+        )}
+        {currency !== 'NGN' && (
+          <Text style={styles.limitsNote}>Withdrawals are always paid out in Nigerian Naira to your bank account.</Text>
         )}
 
         <View style={styles.field}>
@@ -226,6 +235,7 @@ function getStyles(colors: ThemeColors) {
     balanceIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface2, borderWidth: 2, borderColor: colors.jade, alignItems: 'center', justifyContent: 'center' },
     balanceIconText: { color: colors.jade, fontWeight: '700', fontSize: 16 },
     balanceAmount: { color: colors.ink, fontSize: 22, fontWeight: '700' },
+    balanceConverted: { color: colors.muted, fontSize: 12, marginTop: 1 },
     balanceLabel: { color: colors.muted, fontSize: 11, marginTop: 2 },
     limitsNote: { color: colors.muted, fontSize: 11, marginBottom: spacing.lg },
     field: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },

@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Refres
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { useCurrency } from '../currency/CurrencyContext';
 import ScreenHeader from '../components/ScreenHeader';
 import IconBadge from '../components/IconBadge';
 
@@ -10,6 +11,7 @@ type Rate = { brand: string; ratePerDollar: number };
 
 export default function GiftCardsScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors }) {
   const { user } = useAuth();
+  const { formatNgn } = useCurrency();
   const styles = getStyles(colors);
   const [rates, setRates] = useState<Rate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,7 +72,7 @@ export default function GiftCardsScreen({ onBack, colors }: { onBack: () => void
         </View>
         <View style={styles.field}>
           <Text style={styles.flabel}>YOU RECEIVE</Text>
-          <Text style={styles.fval}>₦{Number(payoutNgn).toLocaleString()}</Text>
+          <Text style={styles.fval}>{formatNgn(Number(payoutNgn))}</Text>
         </View>
         <View style={styles.field}>
           <Text style={styles.flabel}>CARD CODE</Text>

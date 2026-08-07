@@ -27,10 +27,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  register: (name: string, email: string, password: string, referralCode?: string) =>
+  register: (name: string, email: string, password: string, referralCode?: string, country?: string) =>
     request<{ token: string; user: any }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password, referralCode: referralCode || undefined }),
+      body: JSON.stringify({ name, email, password, referralCode: referralCode || undefined, country: country || undefined }),
     }),
   login: (email: string, password: string) =>
     request<{ token: string; user: any }>('/auth/login', {

@@ -37,7 +37,7 @@ export default function WalletScreen({
   colors: ThemeColors;
 }) {
   const { user } = useAuth();
-  const { currency, setCurrency, format } = useCurrency();
+  const { currency, setCurrency, format, formatNgn } = useCurrency();
   const { balanceHidden, toggleBalanceHidden } = useBalanceVisibility();
   const styles = getStyles(colors);
   const [tab, setTab] = useState<'holdings' | 'history'>('holdings');
@@ -97,9 +97,7 @@ export default function WalletScreen({
     Animated.timing(fade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
   }, [load, fade]);
 
-  const balanceText = balanceHidden
-    ? '••••••'
-    : `₦${(user?.walletBalanceNgn ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const balanceText = balanceHidden ? '••••••' : formatNgn(user?.walletBalanceNgn ?? 0);
 
   return (
     <View style={styles.screen}>
@@ -173,7 +171,7 @@ export default function WalletScreen({
                       {t.subtitle ? <Text style={styles.holdingChange}>{t.subtitle}</Text> : null}
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.holdingValue}>₦{Math.abs(t.amount_ngn).toLocaleString()}</Text>
+                      <Text style={styles.holdingValue}>{formatNgn(Math.abs(t.amount_ngn))}</Text>
                       <Text style={styles.holdingPrice}>{t.status}</Text>
                     </View>
                   </View>

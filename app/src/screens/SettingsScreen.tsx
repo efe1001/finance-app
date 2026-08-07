@@ -362,6 +362,7 @@ function ReferralsScreen({ onBack, colors }: { onBack: () => void; colors: Theme
 
 function ReportsScreen({ onBack, colors }: { onBack: () => void; colors: ThemeColors }) {
   const styles = getStyles(colors);
+  const { formatNgn } = useCurrency();
   const [txns, setTxns] = useState<any[]>([]);
 
   useEffect(() => {
@@ -381,11 +382,11 @@ function ReportsScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
         <View style={styles.statRow}>
           <View style={styles.statCard}>
             <Text style={styles.flabel}>TOTAL SPENT</Text>
-            <Text style={styles.statValue}>₦{spent.toLocaleString()}</Text>
+            <Text style={styles.statValue}>{formatNgn(spent)}</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.flabel}>TOTAL RECEIVED</Text>
-            <Text style={styles.statValue}>₦{received.toLocaleString()}</Text>
+            <Text style={styles.statValue}>{formatNgn(received)}</Text>
           </View>
         </View>
         <Text style={styles.sectionHead}>BY CATEGORY</Text>
@@ -393,7 +394,7 @@ function ReportsScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
         {Object.entries(byType).map(([type, total]) => (
           <View key={type} style={styles.row}>
             <Text style={[styles.rowLabel, { textTransform: 'capitalize' }]}>{type}</Text>
-            <Text style={styles.rowLabel}>₦{total.toLocaleString()}</Text>
+            <Text style={styles.rowLabel}>{formatNgn(total as number)}</Text>
           </View>
         ))}
       </ScrollView>

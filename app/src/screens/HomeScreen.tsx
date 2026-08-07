@@ -35,7 +35,7 @@ export default function HomeScreen({
 }) {
   const { user } = useAuth();
   const { colors, mode, toggleMode } = useTheme();
-  const { currency, setCurrency, format } = useCurrency();
+  const { currency, setCurrency, format, formatNgn } = useCurrency();
   const { balanceHidden, toggleBalanceHidden } = useBalanceVisibility();
   const styles = getStyles(colors);
   const [ticker, setTicker] = useState<TickerItem[]>([]);
@@ -69,9 +69,7 @@ export default function HomeScreen({
     Animated.timing(fade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
   }, [load, fade]);
 
-  const balanceText = balanceHidden
-    ? '••••••'
-    : `₦${(user?.walletBalanceNgn ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const balanceText = balanceHidden ? '••••••' : formatNgn(user?.walletBalanceNgn ?? 0);
 
   return (
     <View style={styles.screen}>
@@ -158,7 +156,7 @@ export default function HomeScreen({
                 </View>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.activityAmt}>₦{Math.abs(item.amount_ngn).toLocaleString()}</Text>
+                <Text style={styles.activityAmt}>{formatNgn(Math.abs(item.amount_ngn))}</Text>
                 <View style={[styles.pill, item.status === 'Successful' ? styles.pillOk : styles.pillPending]}>
                   <Text style={[styles.pillText, { color: item.status === 'Successful' ? colors.jade : colors.signal }]}>
                     {item.status}

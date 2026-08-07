@@ -9,14 +9,15 @@ type User = {
   isAdmin: boolean;
   referralCode: string;
   ninStatus: string;
+  country: string | null;
 };
 
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, referralCode?: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
+  register: (name: string, email: string, password: string, referralCode?: string, country?: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 };
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await api.login(email, password);
       setAuthToken(res.token);
       setUser(res.user);
+      return res.user as User;
     } catch (e: any) {
       setError(e.message);
       throw e;
@@ -43,11 +45,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string, referralCode?: string) => {
+  const register = useCallback(async (name: string, email: string, password: string, referralCode?: string, country?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.register(name, email, password, referralCode);
+      const res = await api.register(name, email, password, referralCode, country);
       setAuthToken(res.token);
       setUser(res.user);
     } catch (e: any) {

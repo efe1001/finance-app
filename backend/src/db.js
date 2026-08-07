@@ -112,6 +112,7 @@ async function init() {
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS admin_id INTEGER REFERENCES users(id);
     ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER REFERENCES users(id);
     ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS country TEXT;
     ALTER TABLE p2p_listings ADD COLUMN IF NOT EXISTS buyer_id INTEGER REFERENCES users(id);
     ALTER TABLE p2p_listings ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMP;
     ALTER TABLE p2p_listings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;

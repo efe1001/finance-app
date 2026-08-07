@@ -32,11 +32,12 @@ function publicUser(user) {
     isAdmin: user.is_admin,
     referralCode: user.referral_code,
     ninStatus: user.nin_status,
+    country: user.country,
   };
 }
 
 router.post('/register', authLimiter, async (req, res) => {
-  const { name, email, password, referralCode } = req.body;
+  const { name, email, password, referralCode, country } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'name, email and password are required' });
   }
@@ -57,8 +58,8 @@ router.post('/register', authLimiter, async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const { rows } = await pool.query(
-    'INSERT INTO users (name, email, password_hash, wallet_balance_ngn, referred_by) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-    [name, email, passwordHash, 0, referrer?.id || null],
+    'INSERT INTO users (name, email, password_hash, wallet_balance_ngn, referred_by, country) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [name, email, passwordHash, 0, referrer?.id || null, country || null],
   );
 
   let user = rows[0];

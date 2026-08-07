@@ -12,13 +12,21 @@ import {
 import { spacing, radius, ThemeColors } from '../theme';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
+import { useCurrency, COUNTRIES } from '../currency/CurrencyContext';
 
 export default function LoginScreen({ onGoToRegister }: { onGoToRegister: () => void }) {
   const { login, loading, error } = useAuth();
   const { colors } = useTheme();
+  const { setCurrency } = useCurrency();
   const styles = getStyles(colors);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  async function submit() {
+    const user = await login(email, password);
+    const match = COUNTRIES.find(c => c.name === user.country);
+    if (match) setCurrency(match.currency);
+  }
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -54,7 +62,7 @@ export default function LoginScreen({ onGoToRegister }: { onGoToRegister: () => 
 
         {error && <Text style={styles.error}>{error}</Text>}
 
-        <TouchableOpacity style={[styles.cta, loading && { opacity: 0.6 }]} disabled={loading} onPress={() => login(email, password)}>
+        <TouchableOpacity style={[styles.cta, loading && { opacity: 0.6 }]} disabled={loading} onPress={submit}>
           <Text style={styles.ctaText}>{loading ? 'Logging in…' : 'Log In'}</Text>
         </TouchableOpacity>
 
