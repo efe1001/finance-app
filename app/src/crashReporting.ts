@@ -1,19 +1,55 @@
-import { getCrashlytics, recordError, setUserId, log } from '@react-native-firebase/crashlytics';
+import { getCrashlytics, recordError, setUserId, log, type Crashlytics } from '@react-native-firebase/crashlytics';
 
-const crashlytics = getCrashlytics();
+// Lazily resolved on first use, not at module load - calling into the native
+// module before Firebase's own native init has finished can crash the whole
+// app before a single screen renders. Every entry point below is wrapped so
+// a crash-reporting failure can never itself cause a crash.
+let crashlytics: Crashlytics | null | undefined;
+function getInstance(): Crashlytics | null {
+  if (crashlytics !== undefined) return crashlytics;
+  try {
+    crashlytics = getCrashlytics();
+  } catch {
+    crashlytics = null;
+  }
+  return crashlytics;
+}
 
 export function initCrashReporting() {
-  const previousHandler = ErrorUtils.getGlobalHandler();
-  ErrorUtils.setGlobalHandler((error, isFatal) => {
-    recordError(crashlytics, error);
-    previousHandler(error, isFatal);
-  });
+  try {
+    const previousHandler = ErrorUtils.getGlobalHandler();
+    ErrorUtils.setGlobalHandler((error, isFatal) => {
+      const instance = getInstance();
+      if (instance) {
+        try {
+          recordError(instance, error);
+        } catch {
+          // swallow - reporting the crash must never block handling it
+        }
+      }
+      previousHandler(error, isFatal);
+    });
+  } catch {
+    // best-effort
+  }
 }
 
 export function identifyCrashUser(userId: number | string) {
-  setUserId(crashlytics, String(userId)).catch(() => {});
+  const instance = getInstance();
+  if (!instance) return;
+  try {
+    setUserId(instance, String(userId)).catch(() => {});
+  } catch {
+    // best-effort
+  }
 }
 
 export function logBreadcrumb(message: string) {
-  log(crashlytics, message);
+  const instance = getInstance();
+  if (!instance) return;
+  try {
+    log(instance, message);
+  } catch {
+    // best-effort
+  }
 }
