@@ -4,6 +4,7 @@ import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
+import { NGN_PER_USD } from '../currency/CurrencyContext';
 import IconBadge from '../components/IconBadge';
 
 type Tab = 'approvals' | 'users' | 'nin' | 'stats' | 'wallets' | 'rates' | 'settings';
@@ -534,91 +535,208 @@ function WalletsTab({ colors }: { colors: ThemeColors }) {
   );
 }
 
+type Tier = { id: number; brand: string; minUsd: number; maxUsd: number | null; percentage: number };
+
+function tierPayout(faceValueUsd: number, percentage: number) {
+  const ngn = faceValueUsd * NGN_PER_USD * (percentage / 100);
+  return { ngn, usd: ngn / NGN_PER_USD };
+}
+
+function findTier(tiers: Tier[], faceValueUsd: number): Tier | null {
+  const matches = tiers.filter(t => faceValueUsd >= t.minUsd && (t.maxUsd == null || faceValueUsd <= t.maxUsd));
+  if (!matches.length) return null;
+  return matches.reduce((best, t) => (t.minUsd > best.minUsd ? t : best), matches[0]);
+}
+
 function RatesTab({ colors }: { colors: ThemeColors }) {
   const styles = getStyles(colors);
-  const [rates, setRates] = useState<{ brand: string; ratePerDollar: number }[]>([]);
-  const [edited, setEdited] = useState<Record<string, string>>({});
-  const [savingBrand, setSavingBrand] = useState<string | null>(null);
+  const [tiers, setTiers] = useState<Tier[]>([]);
+  const [edited, setEdited] = useState<Record<number, { minUsd: string; maxUsd: string; percentage: string }>>({});
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [newTierForBrand, setNewTierForBrand] = useState<Record<string, { minUsd: string; maxUsd: string; percentage: string }>>({});
+  const [addingBrand, setAddingBrand] = useState<string | null>(null);
   const [newBrand, setNewBrand] = useState('');
-  const [newRate, setNewRate] = useState('');
-  const [adding, setAdding] = useState(false);
+  const [newBrandTier, setNewBrandTier] = useState({ minUsd: '0', maxUsd: '', percentage: '' });
+  const [addingNewBrand, setAddingNewBrand] = useState(false);
+
+  const [calcBrand, setCalcBrand] = useState<string | null>(null);
+  const [calcAmount, setCalcAmount] = useState('100');
 
   const load = useCallback(() => {
-    api.admin.giftCardRates().then(r => {
-      setRates(r);
-      const e: Record<string, string> = {};
-      r.forEach(x => (e[x.brand] = String(x.ratePerDollar)));
+    api.admin.giftCardTiers().then(list => {
+      setTiers(list);
+      const e: typeof edited = {};
+      list.forEach(t => (e[t.id] = { minUsd: String(t.minUsd), maxUsd: t.maxUsd == null ? '' : String(t.maxUsd), percentage: String(t.percentage) }));
       setEdited(e);
+      if (!calcBrand && list.length) setCalcBrand(list[0].brand);
     });
-  }, []);
+  }, [calcBrand]);
 
   useEffect(() => {
     load();
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  async function save(brand: string) {
-    setSavingBrand(brand);
+  const byBrand: Record<string, Tier[]> = {};
+  tiers.forEach(t => {
+    if (!byBrand[t.brand]) byBrand[t.brand] = [];
+    byBrand[t.brand].push(t);
+  });
+  Object.values(byBrand).forEach(list => list.sort((a, b) => a.minUsd - b.minUsd));
+  const brands = Object.keys(byBrand).sort();
+
+  async function saveTier(id: number) {
+    const e = edited[id];
+    if (!e) return;
+    setSavingId(id);
     try {
-      await api.admin.updateGiftCardRate(brand, Number(edited[brand]));
+      await api.admin.updateGiftCardTier(id, {
+        minUsd: Number(e.minUsd),
+        maxUsd: e.maxUsd === '' ? null : Number(e.maxUsd),
+        percentage: Number(e.percentage),
+      });
       load();
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
     } finally {
-      setSavingBrand(null);
+      setSavingId(null);
     }
   }
 
-  async function remove(brand: string) {
-    setSavingBrand(brand);
+  async function removeTier(id: number) {
+    setSavingId(id);
     try {
-      await api.admin.deleteGiftCardRate(brand);
+      await api.admin.deleteGiftCardTier(id);
       load();
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
     } finally {
-      setSavingBrand(null);
+      setSavingId(null);
     }
   }
 
-  async function addNew() {
-    if (!newBrand || !newRate) return;
-    setAdding(true);
+  async function addTierToBrand(brand: string) {
+    const f = newTierForBrand[brand];
+    if (!f?.percentage) return;
+    setAddingBrand(brand);
     try {
-      await api.admin.updateGiftCardRate(newBrand, Number(newRate));
+      await api.admin.addGiftCardTier({
+        brand,
+        minUsd: Number(f.minUsd || '0'),
+        maxUsd: f.maxUsd === '' || f.maxUsd == null ? null : Number(f.maxUsd),
+        percentage: Number(f.percentage),
+      });
+      setNewTierForBrand(s => ({ ...s, [brand]: { minUsd: '', maxUsd: '', percentage: '' } }));
+      load();
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setAddingBrand(null);
+    }
+  }
+
+  async function addNewBrand() {
+    if (!newBrand || !newBrandTier.percentage) return;
+    setAddingNewBrand(true);
+    try {
+      await api.admin.addGiftCardTier({
+        brand: newBrand,
+        minUsd: Number(newBrandTier.minUsd || '0'),
+        maxUsd: newBrandTier.maxUsd === '' ? null : Number(newBrandTier.maxUsd),
+        percentage: Number(newBrandTier.percentage),
+      });
+      setCalcBrand(newBrand);
       setNewBrand('');
-      setNewRate('');
+      setNewBrandTier({ minUsd: '0', maxUsd: '', percentage: '' });
       load();
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
     } finally {
-      setAdding(false);
+      setAddingNewBrand(false);
     }
   }
+
+  const calcTiers = calcBrand ? byBrand[calcBrand] ?? [] : [];
+  const calcMatch = findTier(calcTiers, Number(calcAmount || '0'));
+  const calcResult = calcMatch ? tierPayout(Number(calcAmount || '0'), calcMatch.percentage) : null;
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
       <Text style={styles.modalHint}>
-        Rate is what a user is paid per $1 face value. Edit and save, or add a new card brand below.
+        Gift card payouts are tiered by face value — bigger cards get a better percentage. Set the ranges per brand below.
       </Text>
-      {rates.map(r => (
-        <View key={r.brand} style={styles.card}>
-          <View style={styles.fieldHeadRow}>
-            <IconBadge name="giftcard" size={32} />
-            <Text style={styles.flabel}>{r.brand.toUpperCase()} — ₦ PER $1</Text>
-          </View>
-          <TextInput
-            style={styles.input}
-            value={edited[r.brand] ?? ''}
-            onChangeText={v => setEdited(s => ({ ...s, [r.brand]: v }))}
-            keyboardType="decimal-pad"
-            placeholderTextColor={colors.muted}
-          />
-          <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
-            <TouchableOpacity style={[styles.adjustBtn, { flex: 1 }]} onPress={() => save(r.brand)} disabled={savingBrand === r.brand}>
-              <Text style={styles.adjustBtnText}>{savingBrand === r.brand ? 'Saving…' : 'Save'}</Text>
+
+      <Text style={styles.sectionHead}>TRY IT — SEE WHAT A USER WOULD SEE</Text>
+      <View style={styles.card}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, marginBottom: spacing.md }}>
+          {brands.map(b => (
+            <TouchableOpacity key={b} style={[styles.calcBrandChip, calcBrand === b && styles.calcBrandChipOn]} onPress={() => setCalcBrand(b)}>
+              <Text style={[styles.calcBrandChipText, calcBrand === b && styles.calcBrandChipTextOn]}>{b}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.rejectBtn, { flex: 1 }]} onPress={() => remove(r.brand)} disabled={savingBrand === r.brand}>
-              <Text style={styles.rejectText}>Remove</Text>
+          ))}
+        </ScrollView>
+        <Text style={styles.flabel}>SAMPLE CARD VALUE (USD)</Text>
+        <TextInput style={styles.input} value={calcAmount} onChangeText={setCalcAmount} keyboardType="decimal-pad" placeholderTextColor={colors.muted} />
+        {calcMatch && calcResult ? (
+          <View style={styles.calcResult}>
+            <Text style={styles.calcResultText}>
+              Matches the {tierRangeLabel(calcMatch)} tier at {calcMatch.percentage}%
+            </Text>
+            <Text style={styles.calcResultBig}>₦{calcResult.ngn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
+            <Text style={styles.calcResultSub}>≈ ${calcResult.usd.toFixed(2)} — this is exactly what the user's "You Receive" field will show</Text>
+          </View>
+        ) : (
+          <Text style={styles.calcNoMatch}>No tier configured for that amount — the user would see an error.</Text>
+        )}
+      </View>
+
+      {brands.map(brand => (
+        <View key={brand}>
+          <Text style={styles.sectionHead}>{brand.toUpperCase()}</Text>
+          {byBrand[brand].map(t => {
+            const e = edited[t.id];
+            const previewPct = Number(e?.percentage || t.percentage);
+            const sample = Math.max(t.minUsd, 1);
+            const preview = tierPayout(sample, previewPct);
+            return (
+              <View key={t.id} style={styles.card}>
+                <View style={styles.tierEditRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.flabel}>MIN $</Text>
+                    <TextInput style={styles.input} value={e?.minUsd ?? ''} onChangeText={v => setEdited(s => ({ ...s, [t.id]: { ...s[t.id], minUsd: v } }))} keyboardType="decimal-pad" placeholderTextColor={colors.muted} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.flabel}>MAX $ (blank = no cap)</Text>
+                    <TextInput style={styles.input} value={e?.maxUsd ?? ''} onChangeText={v => setEdited(s => ({ ...s, [t.id]: { ...s[t.id], maxUsd: v } }))} keyboardType="decimal-pad" placeholderTextColor={colors.muted} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.flabel}>PAYOUT %</Text>
+                    <TextInput style={styles.input} value={e?.percentage ?? ''} onChangeText={v => setEdited(s => ({ ...s, [t.id]: { ...s[t.id], percentage: v } }))} keyboardType="decimal-pad" placeholderTextColor={colors.muted} />
+                  </View>
+                </View>
+                {previewPct > 0 && (
+                  <Text style={styles.tierPreview}>e.g. a ${sample} card here → ₦{preview.ngn.toLocaleString(undefined, { maximumFractionDigits: 0 })} (${preview.usd.toFixed(2)})</Text>
+                )}
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
+                  <TouchableOpacity style={[styles.adjustBtn, { flex: 1 }]} onPress={() => saveTier(t.id)} disabled={savingId === t.id}>
+                    <Text style={styles.adjustBtnText}>{savingId === t.id ? 'Saving…' : 'Save'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.rejectBtn, { flex: 1 }]} onPress={() => removeTier(t.id)} disabled={savingId === t.id}>
+                    <Text style={styles.rejectText}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+          <View style={styles.card}>
+            <Text style={styles.flabel}>ADD ANOTHER TIER FOR {brand.toUpperCase()}</Text>
+            <View style={styles.tierEditRow}>
+              <TextInput style={[styles.input, styles.tierAddInput]} value={newTierForBrand[brand]?.minUsd ?? ''} onChangeText={v => setNewTierForBrand(s => ({ ...s, [brand]: { minUsd: v, maxUsd: s[brand]?.maxUsd ?? '', percentage: s[brand]?.percentage ?? '' } }))} placeholder="Min $" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
+              <TextInput style={[styles.input, styles.tierAddInput]} value={newTierForBrand[brand]?.maxUsd ?? ''} onChangeText={v => setNewTierForBrand(s => ({ ...s, [brand]: { minUsd: s[brand]?.minUsd ?? '', maxUsd: v, percentage: s[brand]?.percentage ?? '' } }))} placeholder="Max $" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
+              <TextInput style={[styles.input, styles.tierAddInput]} value={newTierForBrand[brand]?.percentage ?? ''} onChangeText={v => setNewTierForBrand(s => ({ ...s, [brand]: { minUsd: s[brand]?.minUsd ?? '', maxUsd: s[brand]?.maxUsd ?? '', percentage: v } }))} placeholder="%" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
+            </View>
+            <TouchableOpacity style={styles.cta} onPress={() => addTierToBrand(brand)} disabled={addingBrand === brand || !newTierForBrand[brand]?.percentage}>
+              <Text style={styles.ctaText}>{addingBrand === brand ? 'Adding…' : 'Add Tier'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -628,14 +746,21 @@ function RatesTab({ colors }: { colors: ThemeColors }) {
       <View style={styles.card}>
         <Text style={styles.flabel}>BRAND NAME</Text>
         <TextInput style={styles.input} value={newBrand} onChangeText={setNewBrand} placeholder="e.g. Vanilla" placeholderTextColor={colors.muted} />
-        <Text style={[styles.flabel, { marginTop: spacing.sm }]}>₦ PER $1</Text>
-        <TextInput style={styles.input} value={newRate} onChangeText={setNewRate} keyboardType="decimal-pad" placeholderTextColor={colors.muted} />
-        <TouchableOpacity style={styles.cta} onPress={addNew} disabled={adding || !newBrand || !newRate}>
-          <Text style={styles.ctaText}>{adding ? 'Adding…' : 'Add Card Brand'}</Text>
+        <View style={[styles.tierEditRow, { marginTop: spacing.sm }]}>
+          <TextInput style={[styles.input, styles.tierAddInput]} value={newBrandTier.minUsd} onChangeText={v => setNewBrandTier(s => ({ ...s, minUsd: v }))} placeholder="Min $" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
+          <TextInput style={[styles.input, styles.tierAddInput]} value={newBrandTier.maxUsd} onChangeText={v => setNewBrandTier(s => ({ ...s, maxUsd: v }))} placeholder="Max $" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
+          <TextInput style={[styles.input, styles.tierAddInput]} value={newBrandTier.percentage} onChangeText={v => setNewBrandTier(s => ({ ...s, percentage: v }))} placeholder="%" placeholderTextColor={colors.muted} keyboardType="decimal-pad" />
+        </View>
+        <TouchableOpacity style={styles.cta} onPress={addNewBrand} disabled={addingNewBrand || !newBrand || !newBrandTier.percentage}>
+          <Text style={styles.ctaText}>{addingNewBrand ? 'Adding…' : 'Add Card Brand'}</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
   );
+}
+
+function tierRangeLabel(t: Tier) {
+  return t.maxUsd == null ? `$${t.minUsd}+` : `$${t.minUsd}–${t.maxUsd}`;
 }
 
 function LimitsTab({ colors }: { colors: ThemeColors }) {
@@ -792,5 +917,18 @@ function getStyles(colors: ThemeColors) {
     flabel: { color: colors.muted, fontSize: 10, letterSpacing: 0.5 },
     cta: { backgroundColor: colors.signal, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center', marginTop: spacing.md },
     ctaText: { color: colors.signalInk, fontWeight: '700', fontSize: 14 },
+
+    calcBrandChip: { paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
+    calcBrandChipOn: { backgroundColor: colors.signal, borderColor: 'transparent' },
+    calcBrandChipText: { color: colors.muted, fontSize: 12, fontWeight: '700' },
+    calcBrandChipTextOn: { color: colors.signalInk },
+    calcResult: { backgroundColor: colors.surface2, borderRadius: radius.md, padding: spacing.lg, marginTop: spacing.sm },
+    calcResultText: { color: colors.muted, fontSize: 11.5 },
+    calcResultBig: { color: colors.jade, fontSize: 22, fontWeight: '700', marginTop: spacing.xs },
+    calcResultSub: { color: colors.muted, fontSize: 11, marginTop: 2 },
+    calcNoMatch: { color: colors.ember, fontSize: 12, marginTop: spacing.sm },
+    tierEditRow: { flexDirection: 'row', gap: spacing.sm },
+    tierAddInput: { flex: 1 },
+    tierPreview: { color: colors.signal, fontSize: 11, marginTop: spacing.xs },
   });
 }

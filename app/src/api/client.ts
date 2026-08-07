@@ -116,9 +116,18 @@ export const api = {
       `/crypto/prices?ids=${ids}&vs_currency=usd`,
     ),
 
-  giftCardRates: () => request<{ brand: string; ratePerDollar: number }[]>('/giftcards/rates'),
-  submitGiftCard: (body: { brand: string; faceValueUsd: number; code: string }) =>
-    request<any>('/giftcards/submit', { method: 'POST', body: JSON.stringify(body) }),
+  giftCardRates: () =>
+    request<{ brand: string; tiers: { id: number; minUsd: number; maxUsd: number | null; percentage: number }[] }[]>(
+      '/giftcards/rates',
+    ),
+  submitGiftCard: (body: {
+    brand: string;
+    faceValueUsd: number;
+    code?: string;
+    receiptData?: string;
+    receiptMime?: string;
+    receiptFilename?: string;
+  }) => request<any>('/giftcards/submit', { method: 'POST', body: JSON.stringify(body) }),
 
   p2pListings: () => request<any[]>('/p2p/listings'),
   myP2pListings: () => request<any[]>('/p2p/listings/mine'),
@@ -152,14 +161,16 @@ export const api = {
     wallets: () => request<{ asset: string; address: string; updated_at: string }[]>('/admin/wallets'),
     updateWallet: (asset: string, address: string) =>
       request<any>(`/admin/wallets/${asset}`, { method: 'PUT', body: JSON.stringify({ address }) }),
-    giftCardRates: () => request<{ brand: string; ratePerDollar: number }[]>('/admin/giftcard-rates'),
-    updateGiftCardRate: (brand: string, ratePerDollar: number) =>
-      request<any>(`/admin/giftcard-rates/${encodeURIComponent(brand)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ ratePerDollar }),
-      }),
-    deleteGiftCardRate: (brand: string) =>
-      request<{ ok: true }>(`/admin/giftcard-rates/${encodeURIComponent(brand)}`, { method: 'DELETE' }),
+    giftCardTiers: () =>
+      request<{ id: number; brand: string; minUsd: number; maxUsd: number | null; percentage: number }[]>(
+        '/admin/giftcard-tiers',
+      ),
+    addGiftCardTier: (body: { brand: string; minUsd: number; maxUsd?: number | null; percentage: number }) =>
+      request<any>('/admin/giftcard-tiers', { method: 'POST', body: JSON.stringify(body) }),
+    updateGiftCardTier: (id: number, body: { minUsd?: number; maxUsd?: number | null; percentage?: number }) =>
+      request<any>(`/admin/giftcard-tiers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+    deleteGiftCardTier: (id: number) =>
+      request<{ ok: true }>(`/admin/giftcard-tiers/${id}`, { method: 'DELETE' }),
     approveNin: (userId: number) => request<any>(`/admin/users/${userId}/nin/approve`, { method: 'POST' }),
     rejectNin: (userId: number, note?: string) =>
       request<any>(`/admin/users/${userId}/nin/reject`, { method: 'POST', body: JSON.stringify({ note }) }),

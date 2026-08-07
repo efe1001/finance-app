@@ -14,7 +14,7 @@ export const CURRENCIES: { code: Currency; label: string; symbol: string; perUsd
   { code: 'ZAR', label: 'South African Rand', symbol: 'R', perUsd: 18.1 },
 ];
 
-const NGN_PER_USD = CURRENCIES.find(c => c.code === 'NGN')!.perUsd;
+export const NGN_PER_USD = CURRENCIES.find(c => c.code === 'NGN')!.perUsd;
 
 export const COUNTRIES: { name: string; currency: Currency }[] = [
   { name: 'Nigeria', currency: 'NGN' },

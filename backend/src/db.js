@@ -83,6 +83,43 @@ async function init() {
       ('Google Play', 700), ('Razer Gold', 630), ('Sephora', 610)
     ON CONFLICT (brand) DO NOTHING;
 
+    -- Tiered payout percentages, replacing the flat gift_card_rates above: the
+    -- bigger the card, the better the percentage of face value paid out.
+    -- Percentage is applied to face-value-in-USD converted at the app's
+    -- standard NGN_PER_USD rate, so the "you receive" figure round-trips
+    -- cleanly back through currency conversion instead of drifting.
+    CREATE TABLE IF NOT EXISTS gift_card_tiers (
+      id SERIAL PRIMARY KEY,
+      brand TEXT NOT NULL,
+      min_usd NUMERIC NOT NULL DEFAULT 0,
+      max_usd NUMERIC,
+      percentage NUMERIC NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    INSERT INTO gift_card_tiers (brand, min_usd, max_usd, percentage)
+    SELECT * FROM (VALUES
+      ('Amazon', 0::numeric, 49.99::numeric, 55::numeric),
+      ('Amazon', 50, 199.99, 62),
+      ('Amazon', 200, NULL, 70),
+      ('iTunes', 0, 49.99, 48),
+      ('iTunes', 50, 199.99, 55),
+      ('iTunes', 200, NULL, 62),
+      ('Steam', 0, 49.99, 45),
+      ('Steam', 50, 199.99, 52),
+      ('Steam', 200, NULL, 59),
+      ('Google Play', 0, 49.99, 46),
+      ('Google Play', 50, 199.99, 53),
+      ('Google Play', 200, NULL, 60),
+      ('Razer Gold', 0, 49.99, 42),
+      ('Razer Gold', 50, 199.99, 49),
+      ('Razer Gold', 200, NULL, 56),
+      ('Sephora', 0, 49.99, 40),
+      ('Sephora', 50, 199.99, 47),
+      ('Sephora', 200, NULL, 54)
+    ) AS seed(brand, min_usd, max_usd, percentage)
+    WHERE NOT EXISTS (SELECT 1 FROM gift_card_tiers LIMIT 1);
+
     CREATE TABLE IF NOT EXISTS quidax_addresses (
       user_id INTEGER NOT NULL REFERENCES users(id),
       asset TEXT NOT NULL,

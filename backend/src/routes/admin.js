@@ -196,25 +196,57 @@ router.get('/stats', async (req, res) => {
   });
 });
 
-// --- Gift card rates ---
+// --- Gift card payout tiers (percentage of face value, better rate at higher amounts) ---
 
-router.get('/giftcard-rates', async (req, res) => {
-  const { rows } = await pool.query('SELECT brand, rate_per_dollar FROM gift_card_rates ORDER BY brand');
-  res.json(rows.map(r => ({ brand: r.brand, ratePerDollar: Number(r.rate_per_dollar) })));
+function mapTier(r) {
+  return {
+    id: r.id,
+    brand: r.brand,
+    minUsd: Number(r.min_usd),
+    maxUsd: r.max_usd == null ? null : Number(r.max_usd),
+    percentage: Number(r.percentage),
+  };
+}
+
+router.get('/giftcard-tiers', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM gift_card_tiers ORDER BY brand, min_usd');
+  res.json(rows.map(mapTier));
 });
 
-router.put('/giftcard-rates/:brand', async (req, res) => {
-  const { ratePerDollar } = req.body;
-  if (!ratePerDollar || ratePerDollar <= 0) return res.status(400).json({ error: 'ratePerDollar must be positive' });
+router.post('/giftcard-tiers', async (req, res) => {
+  const { brand, minUsd, maxUsd, percentage } = req.body;
+  if (!brand || minUsd == null || percentage == null) {
+    return res.status(400).json({ error: 'brand, minUsd and percentage are required' });
+  }
+  if (percentage <= 0 || percentage > 100) return res.status(400).json({ error: 'percentage must be between 0 and 100' });
+  if (maxUsd != null && Number(maxUsd) <= Number(minUsd)) return res.status(400).json({ error: 'maxUsd must be greater than minUsd' });
+
   const { rows } = await pool.query(
-    'INSERT INTO gift_card_rates (brand, rate_per_dollar) VALUES ($1, $2) ON CONFLICT (brand) DO UPDATE SET rate_per_dollar = $2 RETURNING *',
-    [req.params.brand, ratePerDollar],
+    'INSERT INTO gift_card_tiers (brand, min_usd, max_usd, percentage) VALUES ($1, $2, $3, $4) RETURNING *',
+    [brand, minUsd, maxUsd ?? null, percentage],
   );
-  res.json({ brand: rows[0].brand, ratePerDollar: Number(rows[0].rate_per_dollar) });
+  res.status(201).json(mapTier(rows[0]));
 });
 
-router.delete('/giftcard-rates/:brand', async (req, res) => {
-  await pool.query('DELETE FROM gift_card_rates WHERE brand = $1', [req.params.brand]);
+router.put('/giftcard-tiers/:id', async (req, res) => {
+  const { minUsd, maxUsd, percentage } = req.body;
+  if (percentage != null && (percentage <= 0 || percentage > 100)) {
+    return res.status(400).json({ error: 'percentage must be between 0 and 100' });
+  }
+  const { rows } = await pool.query(
+    `UPDATE gift_card_tiers SET
+       min_usd = COALESCE($1, min_usd),
+       max_usd = CASE WHEN $2 THEN NULL ELSE COALESCE($3, max_usd) END,
+       percentage = COALESCE($4, percentage)
+     WHERE id = $5 RETURNING *`,
+    [minUsd ?? null, maxUsd === null, maxUsd ?? null, percentage ?? null, req.params.id],
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Tier not found' });
+  res.json(mapTier(rows[0]));
+});
+
+router.delete('/giftcard-tiers/:id', async (req, res) => {
+  await pool.query('DELETE FROM gift_card_tiers WHERE id = $1', [req.params.id]);
   res.json({ ok: true });
 });
 
