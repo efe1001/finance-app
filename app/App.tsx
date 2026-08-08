@@ -114,10 +114,12 @@ function Root() {
     // been asked before — covers both new signups and existing users who
     // updated from a version where the permission was silently broken,
     // without ever re-nagging someone who already said yes or no.
-    isPushPermissionUndetermined().then(undetermined => {
-      if (undetermined) setShowNotifPrompt(true);
-      else requestPush();
-    });
+    isPushPermissionUndetermined()
+      .then(undetermined => {
+        if (undetermined) setShowNotifPrompt(true);
+        else requestPush();
+      })
+      .catch(() => setShowNotifPrompt(true));
   }, [user]);
 
   function enableNotifications() {
