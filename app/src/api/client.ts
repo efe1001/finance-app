@@ -91,6 +91,11 @@ export const api = {
     ),
   platformWallets: () => request<{ asset: string; address: string }[]>('/wallet/platform-wallets'),
   holdings: () => request<{ asset: string; amount: number }[]>('/wallet/holdings'),
+  swap: (body: { fromAsset: string; toAsset: string; fromQty: number }) =>
+    request<{ status: string; toQty: number; message: string }>('/wallet/swap', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   flutterwave: {
     initiateDeposit: (amountNgn: number) =>

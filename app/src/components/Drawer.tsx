@@ -21,6 +21,7 @@ export type ScreenKey =
   | 'bills'
   | 'deposit'
   | 'withdraw'
+  | 'swap'
   | 'settings'
   | 'payment'
   | 'admin';
@@ -29,6 +30,7 @@ const NAV_ITEMS: { key: ScreenKey; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: '⌂' },
   { key: 'wallet', label: 'Wallet', icon: '◈' },
   { key: 'trade', label: 'Trade', icon: '⇅' },
+  { key: 'swap', label: 'Swap', icon: '⇄' },
   { key: 'p2p', label: 'P2P · Direct', icon: '⇄' },
   { key: 'giftcards', label: 'Gift Cards', icon: '🎁' },
   { key: 'bills', label: 'Bills & Recharge', icon: '▤' },

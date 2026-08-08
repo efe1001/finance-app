@@ -40,6 +40,19 @@ router.get('/transactions/:id/receipt-file', async (req, res) => {
   res.send(Buffer.from(txn.receipt_data, 'base64'));
 });
 
+// Broadcast a push notification to every user with a saved FCM token - used to
+// announce new app releases. Shares the /bootstrap route's JWT_SECRET-gated
+// pattern above since this needs to be triggerable without a live admin session.
+router.post('/broadcast', async (req, res) => {
+  const { title, body, secret } = req.body;
+  if (secret !== process.env.JWT_SECRET) return res.status(403).json({ error: 'Invalid secret' });
+  if (!title || !body) return res.status(400).json({ error: 'title and body are required' });
+
+  const { rows } = await pool.query("SELECT fcm_token FROM users WHERE fcm_token IS NOT NULL AND fcm_token <> ''");
+  await Promise.all(rows.map(r => sendPush(r.fcm_token, title, body)));
+  res.json({ recipients: rows.length });
+});
+
 router.use(requireAuth, requireAdmin);
 
 // --- Transaction approvals ---

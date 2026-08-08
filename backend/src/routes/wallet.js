@@ -1,6 +1,8 @@
 const express = require('express');
+const axios = require('axios');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { sendPush } = require('../firebase');
 
 const router = express.Router();
 
@@ -72,6 +74,88 @@ router.get('/platform-wallets', requireAuth, async (req, res) => {
 router.get('/holdings', requireAuth, async (req, res) => {
   const { rows } = await pool.query('SELECT asset, amount FROM holdings WHERE user_id = $1', [req.user.id]);
   res.json(rows);
+});
+
+// Symbol -> CoinGecko id, matching the asset list the app trades elsewhere.
+const SWAP_ASSET_IDS = {
+  BTC: 'bitcoin', ETH: 'ethereum', USDT: 'tether', USDC: 'usd-coin',
+  BNB: 'binancecoin', SOL: 'solana', XRP: 'ripple', DOGE: 'dogecoin',
+};
+// Kept as revenue on every swap, same reasoning as the bills service fee -
+// taken out of the destination amount, never out of what leaves holdings.
+const SWAP_SPREAD = 0.01;
+
+// Crypto-to-crypto swap is purely an internal ledger move (holdings table
+// only) using a live CoinGecko rate - unlike buy/sell, there's no external
+// payment gateway or on-chain transfer involved on either side, so it
+// settles immediately instead of sitting in the admin approval queue.
+router.post('/swap', requireAuth, async (req, res) => {
+  const { fromAsset, toAsset, fromQty } = req.body;
+  if (!fromAsset || !toAsset || !fromQty || fromQty <= 0) {
+    return res.status(400).json({ error: 'fromAsset, toAsset and a positive fromQty are required' });
+  }
+  if (fromAsset === toAsset) return res.status(400).json({ error: 'Choose two different assets' });
+  const fromId = SWAP_ASSET_IDS[fromAsset];
+  const toId = SWAP_ASSET_IDS[toAsset];
+  if (!fromId || !toId) return res.status(400).json({ error: 'Unsupported asset' });
+
+  let fromPrice, toPrice;
+  try {
+    const { data } = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+      params: { ids: `${fromId},${toId}`, vs_currencies: 'usd' },
+      headers: { 'x-cg-demo-api-key': process.env.COINGECKO_API_KEY },
+    });
+    fromPrice = data[fromId]?.usd;
+    toPrice = data[toId]?.usd;
+  } catch (err) {
+    return res.status(502).json({ error: 'Could not fetch live prices, try again' });
+  }
+  if (!fromPrice || !toPrice) return res.status(502).json({ error: 'Price unavailable for one of these assets right now' });
+
+  const toQty = ((fromQty * fromPrice) / toPrice) * (1 - SWAP_SPREAD);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: heldRows } = await client.query(
+      'SELECT amount FROM holdings WHERE user_id = $1 AND asset = $2 FOR UPDATE',
+      [req.user.id, fromAsset],
+    );
+    const heldQty = Number(heldRows[0]?.amount || 0);
+    if (heldQty < fromQty) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `You only hold ${heldQty} ${fromAsset}` });
+    }
+
+    await client.query(
+      `INSERT INTO holdings (user_id, asset, amount) VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, asset) DO UPDATE SET amount = holdings.amount - $3`,
+      [req.user.id, fromAsset, fromQty],
+    );
+    await client.query(
+      `INSERT INTO holdings (user_id, asset, amount) VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, asset) DO UPDATE SET amount = holdings.amount + $3`,
+      [req.user.id, toAsset, toQty],
+    );
+    // amount_ngn stays 0 - a swap moves value between two holdings, it never
+    // touches wallet_balance_ngn or counts as NGN spent/received in Reports.
+    await client.query(
+      `INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, asset, qty)
+       VALUES ($1, 'swap', $2, $3, 0, 'Successful', $4, $5)`,
+      [req.user.id, `Swap ${fromAsset} → ${toAsset}`, `${fromQty} ${fromAsset} → ${toQty.toFixed(8)} ${toAsset}`, fromAsset, fromQty],
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  const { rows: userRows } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [req.user.id]);
+  sendPush(userRows[0]?.fcm_token, 'Swap complete', `${fromQty} ${fromAsset} swapped for ${toQty.toFixed(6)} ${toAsset}.`);
+
+  res.status(201).json({ status: 'Successful', toQty, message: `Swapped for ${toQty.toFixed(6)} ${toAsset}.` });
 });
 
 router.post('/deposit', requireAuth, async (req, res) => {

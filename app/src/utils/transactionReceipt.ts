@@ -17,6 +17,7 @@ export type TxnLike = {
 // Wallet's History so a deposit, a bill, and a gift card sale each read
 // differently at a glance instead of an identical placeholder dot.
 export function txnIconKey(t: TxnLike): string {
+  if (t.type === 'swap') return 'swap';
   if (t.type === 'deposit') return 'fund';
   if (t.type === 'withdrawal') return 'withdraw';
   if (t.type === 'crypto') return 'trade';
@@ -36,19 +37,30 @@ export function txnIconKey(t: TxnLike): string {
   return 'bills';
 }
 
+// A swap moves value between two holdings, never NGN in or out of the
+// wallet, so amount_ngn is always 0 for one - showing "₦0" in a list row
+// would read as a bug. The subtitle already carries "0.01 BTC → 650 USDT",
+// so surface the "received" half of that as the row's headline value instead.
+export function txnAmountLabel(t: TxnLike, formatNgn: (n: number) => string): string {
+  if (t.type === 'swap' && t.subtitle?.includes('→')) {
+    return t.subtitle.split('→')[1].trim();
+  }
+  return formatNgn(Math.abs(t.amount_ngn));
+}
+
 export function buildTxnReceipt(t: TxnLike, formatNgn: (n: number) => string): Receipt {
+  const isSwap = t.type === 'swap';
   const rows = [
     { label: 'Date', value: t.created_at ? new Date(t.created_at).toLocaleString() : '—' },
-    { label: 'Amount', value: formatNgn(Math.abs(t.amount_ngn)) },
+    { label: isSwap ? 'Swapped' : 'Amount', value: isSwap ? (t.subtitle ?? '—') : formatNgn(Math.abs(t.amount_ngn)) },
   ];
-  if (t.subtitle) rows.push({ label: 'Details', value: t.subtitle });
-  if (t.asset) rows.push({ label: 'Asset', value: `${t.qty ?? ''} ${t.asset}`.trim() });
+  if (!isSwap && t.subtitle) rows.push({ label: 'Details', value: t.subtitle });
   if (t.address) rows.push({ label: 'Reference / Address', value: t.address });
   rows.push({ label: 'Reference ID', value: `#${t.id}` });
   return {
     heading: t.title,
     status: t.status,
     rows,
-    footerNote: t.amount_ngn < 0 ? 'Money out of your wallet.' : 'Money into your wallet.',
+    footerNote: isSwap ? 'Moved between your holdings — your NGN balance is unaffected.' : (t.amount_ngn < 0 ? 'Money out of your wallet.' : 'Money into your wallet.'),
   };
 }

@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useCurrency } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import { useRefresh } from '../data/RefreshContext';
-import { buildTxnReceipt, txnIconKey } from '../utils/transactionReceipt';
+import { buildTxnReceipt, txnIconKey, txnAmountLabel } from '../utils/transactionReceipt';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
@@ -31,6 +31,7 @@ const HISTORY_FILTERS: { key: string; label: string }[] = [
   { key: 'deposit', label: 'Deposits' },
   { key: 'withdrawal', label: 'Withdrawals' },
   { key: 'crypto', label: 'Trades' },
+  { key: 'swap', label: 'Swaps' },
   { key: 'bill', label: 'Bills' },
   { key: 'giftcard', label: 'Gift Cards' },
 ];
@@ -49,6 +50,7 @@ const ASSETS = [
 const ACTIONS: { key: ScreenKey; label: string; icon: string }[] = [
   { key: 'withdraw', label: 'Withdraw', icon: 'withdraw' },
   { key: 'trade', label: 'Trade', icon: 'trade' },
+  { key: 'swap', label: 'Swap', icon: 'swap' },
   { key: 'p2p', label: 'P2P', icon: 'p2p' },
   { key: 'deposit', label: 'Add Money', icon: 'fund' },
 ];
@@ -249,7 +251,7 @@ export default function WalletScreen({
                         </View>
                       </View>
                       <View style={styles.holdingRight}>
-                        <Text style={styles.holdingValue} numberOfLines={1}>{formatNgn(Math.abs(t.amount_ngn))}</Text>
+                        <Text style={styles.holdingValue} numberOfLines={1}>{txnAmountLabel(t, formatNgn)}</Text>
                         <Text style={styles.holdingPrice} numberOfLines={1}>{t.status}</Text>
                       </View>
                     </TouchableOpacity>

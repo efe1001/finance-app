@@ -27,6 +27,7 @@ import DepositScreen from './src/screens/DepositScreen';
 import WithdrawScreen from './src/screens/WithdrawScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import PaymentDetailsScreen from './src/screens/PaymentDetailsScreen';
+import SwapScreen from './src/screens/SwapScreen';
 import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
 import Drawer, { ScreenKey } from './src/components/Drawer';
 import BottomTabs from './src/components/BottomTabs';
@@ -66,6 +67,7 @@ function MainShell() {
         {screen === 'bills' && <BillsScreen onBack={goHome} colors={colors} />}
         {screen === 'deposit' && <DepositScreen onBack={goHome} colors={colors} />}
         {screen === 'withdraw' && <WithdrawScreen onBack={goHome} onNavigate={navigate} colors={colors} />}
+        {screen === 'swap' && <SwapScreen onBack={goHome} colors={colors} />}
         {screen === 'settings' && <SettingsScreen onBack={goHome} onNavigate={navigate} colors={colors} />}
         {screen === 'payment' && <PaymentDetailsScreen onBack={goHome} colors={colors} />}
       </View>

@@ -7,7 +7,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useCurrency } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import { useRefresh } from '../data/RefreshContext';
-import { buildTxnReceipt, txnIconKey, TxnLike } from '../utils/transactionReceipt';
+import { buildTxnReceipt, txnIconKey, txnAmountLabel, TxnLike } from '../utils/transactionReceipt';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
@@ -192,7 +192,7 @@ export default function HomeScreen({
                 </View>
               </View>
               <View style={styles.activityRight}>
-                <Text style={styles.activityAmt} numberOfLines={1}>{formatNgn(Math.abs(item.amount_ngn))}</Text>
+                <Text style={styles.activityAmt} numberOfLines={1}>{txnAmountLabel(item, formatNgn)}</Text>
                 <View style={[styles.pill, item.status === 'Successful' ? styles.pillOk : styles.pillPending]}>
                   <Text style={[styles.pillText, { color: item.status === 'Successful' ? colors.jade : colors.signal }]} numberOfLines={1}>
                     {item.status}
