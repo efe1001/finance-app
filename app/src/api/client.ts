@@ -46,7 +46,7 @@ export const api = {
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
   submitNin: (nin: string) => request<any>('/auth/nin', { method: 'POST', body: JSON.stringify({ nin }) }),
-  saveFcmToken: (token: string) => request<{ ok: true }>('/auth/fcm-token', { method: 'POST', body: JSON.stringify({ token }) }),
+  saveFcmToken: (token: string | null) => request<{ ok: true }>('/auth/fcm-token', { method: 'POST', body: JSON.stringify({ token }) }),
 
   transactions: (opts?: { limit?: number; offset?: number }) =>
     request<any[]>(`/wallet/transactions?limit=${opts?.limit ?? 20}&offset=${opts?.offset ?? 0}`),

@@ -7,6 +7,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useCurrency, CURRENCIES } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import { useAppLock } from '../security/AppLockContext';
+import { checkPushPermissionGranted, requestPushPermissionAndToken, promptToOpenSettingsForNotifications } from '../notifications';
 import { APP_VERSION } from '../appVersion';
 import { checkForUpdate, UpdateInfo } from '../updateCheck';
 import UpdateModal from '../components/UpdateModal';
@@ -96,6 +97,24 @@ function RootSettings({
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [checkedUpToDate, setCheckedUpToDate] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+
+  useEffect(() => {
+    checkPushPermissionGranted().then(setPushEnabled);
+  }, []);
+
+  async function togglePush(value: boolean) {
+    if (value) {
+      const granted = await requestPushPermissionAndToken(token => {
+        api.saveFcmToken(token).catch(() => {});
+      });
+      setPushEnabled(granted);
+      if (!granted) promptToOpenSettingsForNotifications();
+    } else {
+      setPushEnabled(false);
+      api.saveFcmToken(null).catch(() => {});
+    }
+  }
 
   async function onCheckForUpdate() {
     setCheckingUpdate(true);
@@ -172,6 +191,12 @@ function RootSettings({
                 thumbColor="#fff"
               />
             }
+          />
+          <Row
+            icon="🔔"
+            label="Push Notifications"
+            colors={colors}
+            right={<Switch value={pushEnabled} onValueChange={togglePush} trackColor={{ true: colors.signal, false: colors.line }} thumbColor="#fff" />}
           />
           <Row
             icon="$"

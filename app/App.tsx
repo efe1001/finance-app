@@ -7,7 +7,7 @@ import { CurrencyProvider } from './src/currency/CurrencyContext';
 import { BalanceVisibilityProvider } from './src/wallet/BalanceVisibilityContext';
 import { AppLockProvider, useAppLock } from './src/security/AppLockContext';
 import { RefreshProvider } from './src/data/RefreshContext';
-import { initPushNotifications, isPushPermissionUndetermined } from './src/notifications';
+import { requestPushPermissionAndToken, hasShownPushPrompt, markPushPromptShown } from './src/notifications';
 import { initCrashReporting, identifyCrashUser } from './src/crashReporting';
 import { checkForUpdate, UpdateInfo } from './src/updateCheck';
 import { api } from './src/api/client';
@@ -90,7 +90,7 @@ function MainShell() {
 }
 
 function requestPush() {
-  return initPushNotifications(token => {
+  return requestPushPermissionAndToken(token => {
     api.saveFcmToken(token).catch(() => {});
   });
 }
@@ -110,13 +110,13 @@ function Root() {
     if (!user) return;
     identifyCrashUser(user.id);
     checkForUpdate().then(setUpdate);
-    // Only show the branded ask (or request at all) if this device has never
-    // been asked before — covers both new signups and existing users who
-    // updated from a version where the permission was silently broken,
-    // without ever re-nagging someone who already said yes or no.
-    isPushPermissionUndetermined()
-      .then(undetermined => {
-        if (undetermined) setShowNotifPrompt(true);
+    // Show the branded ask exactly once per device, ever - tracked locally
+    // rather than via the OS permission status, since Android's notification
+    // permission is binary (granted/denied) with no "never asked" state to
+    // read back, so there's no reliable way to infer "first time" from it.
+    hasShownPushPrompt()
+      .then(shown => {
+        if (!shown) setShowNotifPrompt(true);
         else requestPush();
       })
       .catch(() => setShowNotifPrompt(true));
@@ -124,6 +124,12 @@ function Root() {
 
   function enableNotifications() {
     requestPush();
+    markPushPromptShown();
+    setShowNotifPrompt(false);
+  }
+
+  function dismissNotificationPrompt() {
+    markPushPromptShown();
     setShowNotifPrompt(false);
   }
 
@@ -144,7 +150,7 @@ function Root() {
         <NotificationPromptModal
           visible={showNotifPrompt}
           onEnable={enableNotifications}
-          onDismiss={() => setShowNotifPrompt(false)}
+          onDismiss={dismissNotificationPrompt}
           colors={colors}
         />
       )}

@@ -151,9 +151,12 @@ router.post('/change-password', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// token may be explicitly null - that's how the Settings toggle turns
+// notifications off, by clearing the stored token so sendPush() has nothing
+// to send to, without needing to touch the OS-level permission at all.
 router.post('/fcm-token', requireAuth, async (req, res) => {
+  if (!('token' in req.body)) return res.status(400).json({ error: 'token is required' });
   const { token } = req.body;
-  if (!token) return res.status(400).json({ error: 'token is required' });
   await pool.query('UPDATE users SET fcm_token = $1 WHERE id = $2', [token, req.user.id]);
   res.json({ ok: true });
 });
