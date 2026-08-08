@@ -178,7 +178,7 @@ router.post('/pay', requireAuth, async (req, res) => {
     customer: customerNumber,
     amount: billAmount,
     recurrence: 'ONCE',
-    type: item.itemCode,
+    type: item.billerCode,
     biller_name: item.provider,
     reference,
   };
