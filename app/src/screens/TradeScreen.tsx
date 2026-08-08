@@ -10,6 +10,7 @@ import ScreenHeader from '../components/ScreenHeader';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
 import BrandedLoader from '../components/BrandedLoader';
+import AssetPickerModal, { PickedAsset } from '../components/AssetPickerModal';
 import { useRefresh } from '../data/RefreshContext';
 
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
@@ -57,7 +58,8 @@ export default function TradeScreen({
   const { currency, fromUsd, toUsd, fromNgn, format, formatNgn } = useCurrency();
   const styles = getStyles(colors);
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
-  const [assetIdx, setAssetIdx] = useState(0);
+  const [asset, setAsset] = useState<PickedAsset>(ASSETS[0]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [prices, setPrices] = useState<Record<string, { usd: number }>>({});
   const [holdings, setHoldings] = useState<Record<string, number>>({});
   const [platformWallets, setPlatformWallets] = useState<{ asset: string; address: string }[]>([]);
@@ -91,11 +93,11 @@ export default function TradeScreen({
   // }, [asset.symbol]);
   // useEffect(() => { if (side === 'sell') loadDepositAddress(); }, [side, loadDepositAddress]);
 
-  const asset = ASSETS[assetIdx];
   const priceUsd = prices[asset.id]?.usd ?? 0;
   const priceNgn = priceUsd * NGN_PER_USD;
   const heldQty = holdings[asset.symbol] ?? 0;
   const platformAddress = platformWallets.find(w => w.asset === asset.symbol)?.address || '';
+  const depositSymbols = new Set(platformWallets.filter(w => w.address).map(w => w.asset));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -124,11 +126,18 @@ export default function TradeScreen({
     load();
   }, [load]);
 
+  // Prices are preloaded for the 8 starter assets only - picking anything else
+  // via the search picker needs its own one-off price fetch.
+  useEffect(() => {
+    if (prices[asset.id]) return;
+    api.cryptoPrices(asset.id).then(p => setPrices(prev => ({ ...prev, ...p }))).catch(() => {});
+  }, [asset.id, prices]);
+
   // A qty typed in one asset/mode doesn't carry meaning after switching either,
   // so start fresh rather than leave a stale, misleading number in the field.
   useEffect(() => {
     setInputValue('');
-  }, [assetIdx, side]);
+  }, [asset.id, side]);
 
   // The crypto quantity being traded — the single source of truth everything
   // else (NGN amount, previews, limits) derives from, regardless of which unit
@@ -204,6 +213,7 @@ export default function TradeScreen({
         amountNgn: side === 'buy' ? -amountNgn : amountNgn,
         address: side === 'buy' ? myAddress : platformAddress,
         asset: asset.symbol,
+        coingeckoId: asset.id,
         qty,
         receiptData,
         receiptMime: receipt?.type ?? undefined,
@@ -279,11 +289,11 @@ export default function TradeScreen({
           <Text style={styles.balanceAmount}>{formatNgn(user?.walletBalanceNgn ?? 0)}</Text>
           <Text style={styles.balanceHint}>Your crypto — tap one to trade it</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-            {ASSETS.map((a, idx) => {
+            {ASSETS.map(a => {
               const qtyHeld = holdings[a.symbol] ?? 0;
               const valueUsd = qtyHeld * (prices[a.id]?.usd ?? 0);
               return (
-                <TouchableOpacity key={a.id} style={[styles.holdingChip, idx === assetIdx && styles.holdingChipOn]} onPress={() => setAssetIdx(idx)}>
+                <TouchableOpacity key={a.id} style={[styles.holdingChip, a.id === asset.id && styles.holdingChipOn]} onPress={() => setAsset(a)}>
                   <IconBadge name={a.id} size={26} glyphSize={13} />
                   <View>
                     <Text style={styles.holdingSymbol}>{a.symbol}</Text>
@@ -305,14 +315,21 @@ export default function TradeScreen({
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.assetRow} contentContainerStyle={{ gap: spacing.sm }}>
-          {ASSETS.map((a, idx) => (
-            <TouchableOpacity key={a.id} style={[styles.assetChip, idx === assetIdx && styles.assetChipOn]} onPress={() => setAssetIdx(idx)}>
-              <Text style={[styles.assetChipText, idx === assetIdx && styles.assetChipTextOn]}>{a.symbol}</Text>
+          {ASSETS.map(a => (
+            <TouchableOpacity key={a.id} style={[styles.assetChip, a.id === asset.id && styles.assetChipOn]} onPress={() => setAsset(a)}>
+              <Text style={[styles.assetChipText, a.id === asset.id && styles.assetChipTextOn]}>{a.symbol}</Text>
               {(holdings[a.symbol] ?? 0) > 0 && (
                 <Text style={styles.ownedCheck} accessibilityLabel="You own this asset">✓</Text>
               )}
             </TouchableOpacity>
           ))}
+          <TouchableOpacity
+            style={[styles.assetChip, !ASSETS.some(a => a.id === asset.id) && styles.assetChipOn]}
+            onPress={() => setPickerOpen(true)}>
+            <Text style={[styles.assetChipText, !ASSETS.some(a => a.id === asset.id) && styles.assetChipTextOn]}>
+              {ASSETS.some(a => a.id === asset.id) ? '🔍 More coins' : `🔍 ${asset.symbol}`}
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
 
         <View style={styles.priceCard}>
@@ -423,6 +440,14 @@ export default function TradeScreen({
         <Text style={styles.trustNote}>Live prices from CoinGecko. An admin manually confirms and completes every trade.</Text>
       </ScrollView>
       <ReceiptModal receipt={orderReceipt} onClose={() => setOrderReceipt(null)} colors={colors} />
+      <AssetPickerModal
+        visible={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={setAsset}
+        colors={colors}
+        depositSymbols={depositSymbols}
+        title={`Select asset to ${side}`}
+      />
     </View>
   );
 }

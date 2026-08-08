@@ -107,23 +107,36 @@ export default function WalletScreen({
     setLoading(true);
     try {
       let failed = false;
-      const [prices, txns, myHoldings] = await Promise.all([
-        api.cryptoPrices(ASSETS.map(a => a.id).join(',')).catch(() => { failed = true; return {}; }),
-        api.transactions({ limit: PAGE_SIZE, offset: 0 }).catch(() => { failed = true; return []; }),
+      const [myHoldings, txns] = await Promise.all([
         api.holdings().catch(() => { failed = true; return []; }),
+        api.transactions({ limit: PAGE_SIZE, offset: 0 }).catch(() => { failed = true; return []; }),
       ]);
-      setHoldings(
-        ASSETS.map(a => {
-          const held = (myHoldings as any[]).find(h => h.asset === a.symbol);
-          return {
-            symbol: a.symbol,
-            icon: a.icon,
-            usd: (prices as any)[a.id]?.usd ?? 0,
-            changePct: (prices as any)[a.id]?.usd_24h_change ?? 0,
-            qty: held ? Number(held.amount) : 0,
-          };
-        }),
-      );
+      // A swap or a buy/sell can now land the user in a coin outside the
+      // original 8 "starter" assets - those need their own price fetch using
+      // the coingecko_id saved on the holding, since a bare symbol like SHIB
+      // isn't enough on its own (ticker symbols collide across coins).
+      const extraHeld = (myHoldings as any[]).filter(h => Number(h.amount) > 0 && !ASSETS.some(a => a.symbol === h.asset));
+      const extraIds = extraHeld.map(h => h.coingecko_id).filter(Boolean);
+      const allIds = Array.from(new Set([...ASSETS.map(a => a.id), ...extraIds]));
+      const prices = await api.cryptoPrices(allIds.join(',')).catch(() => { failed = true; return {}; });
+      const coreRows = ASSETS.map(a => {
+        const held = (myHoldings as any[]).find(h => h.asset === a.symbol);
+        return {
+          symbol: a.symbol,
+          icon: a.icon,
+          usd: (prices as any)[a.id]?.usd ?? 0,
+          changePct: (prices as any)[a.id]?.usd_24h_change ?? 0,
+          qty: held ? Number(held.amount) : 0,
+        };
+      });
+      const extraRows = extraHeld.map((h: any) => ({
+        symbol: h.asset,
+        icon: h.asset.toLowerCase(),
+        usd: h.coingecko_id ? (prices as any)[h.coingecko_id]?.usd ?? 0 : 0,
+        changePct: h.coingecko_id ? (prices as any)[h.coingecko_id]?.usd_24h_change ?? 0 : 0,
+        qty: Number(h.amount),
+      }));
+      setHoldings([...coreRows, ...extraRows]);
       setHistory(txns);
       setHistoryPage(0);
       setHasMoreHistory(txns.length === PAGE_SIZE);

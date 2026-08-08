@@ -38,7 +38,7 @@ router.get('/transactions', requireAuth, async (req, res) => {
 });
 
 router.post('/transactions', requireAuth, async (req, res) => {
-  const { type, title, subtitle, amountNgn, address, asset, qty, receiptData, receiptMime, receiptFilename } = req.body;
+  const { type, title, subtitle, amountNgn, address, asset, qty, coingeckoId, receiptData, receiptMime, receiptFilename } = req.body;
   if (!type || !title || amountNgn == null) {
     return res.status(400).json({ error: 'type, title and amountNgn are required' });
   }
@@ -55,12 +55,12 @@ router.post('/transactions', requireAuth, async (req, res) => {
 
   const { rows } = await pool.query(
     `INSERT INTO transactions
-      (user_id, type, title, subtitle, amount_ngn, status, address, asset, qty, receipt_data, receipt_mime, receipt_filename)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      (user_id, type, title, subtitle, amount_ngn, status, address, asset, qty, coingecko_id, receipt_data, receipt_mime, receipt_filename)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING ${TXN_LIST_COLUMNS}`,
     [
       req.user.id, type, title, subtitle || null, amountNgn, 'Pending', address || null, asset || null, qty || null,
-      receiptData || null, receiptMime || null, receiptFilename || null,
+      coingeckoId || null, receiptData || null, receiptMime || null, receiptFilename || null,
     ],
   );
   res.status(201).json(rows[0]);
@@ -72,7 +72,7 @@ router.get('/platform-wallets', requireAuth, async (req, res) => {
 });
 
 router.get('/holdings', requireAuth, async (req, res) => {
-  const { rows } = await pool.query('SELECT asset, amount FROM holdings WHERE user_id = $1', [req.user.id]);
+  const { rows } = await pool.query('SELECT asset, amount, coingecko_id FROM holdings WHERE user_id = $1', [req.user.id]);
   res.json(rows);
 });
 
@@ -90,13 +90,16 @@ const SWAP_SPREAD = 0.01;
 // payment gateway or on-chain transfer involved on either side, so it
 // settles immediately instead of sitting in the admin approval queue.
 router.post('/swap', requireAuth, async (req, res) => {
-  const { fromAsset, toAsset, fromQty } = req.body;
+  const { fromAsset, toAsset, fromQty, fromCoingeckoId, toCoingeckoId } = req.body;
   if (!fromAsset || !toAsset || !fromQty || fromQty <= 0) {
     return res.status(400).json({ error: 'fromAsset, toAsset and a positive fromQty are required' });
   }
   if (fromAsset === toAsset) return res.status(400).json({ error: 'Choose two different assets' });
-  const fromId = SWAP_ASSET_IDS[fromAsset];
-  const toId = SWAP_ASSET_IDS[toAsset];
+  // The hardcoded map covers the original 8 "starter" assets; anything found
+  // through the full-catalog search picker sends its own CoinGecko id along
+  // since there's no fixed symbol -> id table for the other ~17,000 coins.
+  const fromId = SWAP_ASSET_IDS[fromAsset] || fromCoingeckoId;
+  const toId = SWAP_ASSET_IDS[toAsset] || toCoingeckoId;
   if (!fromId || !toId) return res.status(400).json({ error: 'Unsupported asset' });
 
   let fromPrice, toPrice;
@@ -128,14 +131,14 @@ router.post('/swap', requireAuth, async (req, res) => {
     }
 
     await client.query(
-      `INSERT INTO holdings (user_id, asset, amount) VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, asset) DO UPDATE SET amount = holdings.amount - $3`,
-      [req.user.id, fromAsset, fromQty],
+      `INSERT INTO holdings (user_id, asset, amount, coingecko_id) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id, asset) DO UPDATE SET amount = holdings.amount - $3, coingecko_id = $4`,
+      [req.user.id, fromAsset, fromQty, fromId],
     );
     await client.query(
-      `INSERT INTO holdings (user_id, asset, amount) VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, asset) DO UPDATE SET amount = holdings.amount + $3`,
-      [req.user.id, toAsset, toQty],
+      `INSERT INTO holdings (user_id, asset, amount, coingecko_id) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id, asset) DO UPDATE SET amount = holdings.amount + $3, coingecko_id = $4`,
+      [req.user.id, toAsset, toQty, toId],
     );
     // amount_ngn stays 0 - a swap moves value between two holdings, it never
     // touches wallet_balance_ngn or counts as NGN spent/received in Reports.

@@ -1,5 +1,15 @@
 const BASE_URL = 'https://finance-app-backend-tzke.onrender.com/api';
 
+export type CoinPickerAsset = {
+  id: string;
+  symbol: string;
+  name: string;
+  thumb?: string;
+  marketCapRank: number | null;
+  priceUsd?: number;
+  change24h?: number;
+};
+
 let authToken: string | null = null;
 
 export function setAuthToken(token: string | null) {
@@ -58,6 +68,7 @@ export const api = {
     address?: string;
     asset?: string;
     qty?: number;
+    coingeckoId?: string;
     receiptData?: string;
     receiptMime?: string;
     receiptFilename?: string;
@@ -90,8 +101,8 @@ export const api = {
       { method: 'POST', body: JSON.stringify(body) },
     ),
   platformWallets: () => request<{ asset: string; address: string }[]>('/wallet/platform-wallets'),
-  holdings: () => request<{ asset: string; amount: number }[]>('/wallet/holdings'),
-  swap: (body: { fromAsset: string; toAsset: string; fromQty: number }) =>
+  holdings: () => request<{ asset: string; amount: number; coingecko_id: string | null }[]>('/wallet/holdings'),
+  swap: (body: { fromAsset: string; toAsset: string; fromQty: number; fromCoingeckoId?: string; toCoingeckoId?: string }) =>
     request<{ status: string; toQty: number; message: string }>('/wallet/swap', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -122,6 +133,12 @@ export const api = {
     request<Record<string, { usd: number; usd_24h_change?: number }>>(
       `/crypto/prices?ids=${ids}&vs_currency=usd`,
     ),
+
+  crypto: {
+    search: (q: string) =>
+      request<{ coins: CoinPickerAsset[] }>(`/crypto/search?q=${encodeURIComponent(q)}`),
+    top: (limit = 50) => request<{ coins: CoinPickerAsset[] }>(`/crypto/top?limit=${limit}`),
+  },
 
   giftCardRates: () =>
     request<{ brand: string; tiers: { id: number; minUsd: number; maxUsd: number | null; percentage: number }[] }[]>(

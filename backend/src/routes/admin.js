@@ -99,9 +99,10 @@ router.post('/transactions/:id/approve', async (req, res) => {
       // Selling crypto: NGN goes up, asset holding goes down.
       const holdingDelta = txn.amount_ngn < 0 ? Number(txn.qty) : -Number(txn.qty);
       await client.query(
-        `INSERT INTO holdings (user_id, asset, amount) VALUES ($1, $2, $3)
-         ON CONFLICT (user_id, asset) DO UPDATE SET amount = holdings.amount + $3`,
-        [txn.user_id, txn.asset, holdingDelta],
+        `INSERT INTO holdings (user_id, asset, amount, coingecko_id) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, asset) DO UPDATE SET amount = holdings.amount + $3,
+           coingecko_id = COALESCE($4, holdings.coingecko_id)`,
+        [txn.user_id, txn.asset, holdingDelta, txn.coingecko_id || null],
       );
     }
 

@@ -159,6 +159,12 @@ async function init() {
     ALTER TABLE p2p_listings ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMP;
     ALTER TABLE p2p_listings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;
     ALTER TABLE p2p_listings ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP;
+    -- Ticker symbols collide across coins (many unrelated tokens all use "SHIB",
+    -- etc), so once trading opened up beyond the fixed 8-asset list, the symbol
+    -- alone stopped being enough to re-price a holding later - the CoinGecko id
+    -- picked at trade/swap time is stored alongside it for that.
+    ALTER TABLE holdings ADD COLUMN IF NOT EXISTS coingecko_id TEXT;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS coingecko_id TEXT;
 
     UPDATE users SET referral_code = 'FA' || LPAD(id::text, 6, '0') WHERE referral_code IS NULL;
   `);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Alert, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -8,8 +8,9 @@ import ScreenHeader from '../components/ScreenHeader';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
 import BrandedLoader from '../components/BrandedLoader';
+import AssetPickerModal, { PickedAsset } from '../components/AssetPickerModal';
 
-const ASSETS = [
+const ASSETS: PickedAsset[] = [
   { id: 'bitcoin', symbol: 'BTC' },
   { id: 'ethereum', symbol: 'ETH' },
   { id: 'tether', symbol: 'USDT' },
@@ -34,8 +35,8 @@ export default function SwapScreen({ onBack, colors }: { onBack: () => void; col
   const [holdings, setHoldings] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [fromIdx, setFromIdx] = useState(0);
-  const [toIdx, setToIdx] = useState(2);
+  const [fromAsset, setFromAsset] = useState<PickedAsset>(ASSETS[0]);
+  const [toAsset, setToAsset] = useState<PickedAsset>(ASSETS[2]);
   const [fromInput, setFromInput] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [statusOk, setStatusOk] = useState(false);
@@ -50,7 +51,7 @@ export default function SwapScreen({ onBack, colors }: { onBack: () => void; col
         api.cryptoPrices(ASSETS.map(a => a.id).join(',')),
         api.holdings().catch(() => []),
       ]);
-      setPrices(p);
+      setPrices(prev => ({ ...prev, ...p }));
       const map: Record<string, number> = {};
       (h as { asset: string; amount: number }[]).forEach(x => (map[x.asset] = Number(x.amount)));
       setHoldings(map);
@@ -64,8 +65,16 @@ export default function SwapScreen({ onBack, colors }: { onBack: () => void; col
     load();
   }, [load]);
 
-  const fromAsset = ASSETS[fromIdx];
-  const toAsset = ASSETS[toIdx];
+  // Prices are preloaded for the 8 starter assets only - anything picked via
+  // the search picker needs its own one-off fetch.
+  useEffect(() => {
+    [fromAsset.id, toAsset.id].forEach(id => {
+      if (!prices[id]) {
+        api.cryptoPrices(id).then(p => setPrices(prev => ({ ...prev, ...p }))).catch(() => {});
+      }
+    });
+  }, [fromAsset.id, toAsset.id, prices]);
+
   const fromPrice = prices[fromAsset.id]?.usd ?? 0;
   const toPrice = prices[toAsset.id]?.usd ?? 0;
   const fromHeld = holdings[fromAsset.symbol] ?? 0;
@@ -75,9 +84,9 @@ export default function SwapScreen({ onBack, colors }: { onBack: () => void; col
   const canSubmit = fromQty > 0 && !overHeld && fromAsset.symbol !== toAsset.symbol;
 
   function flip() {
-    const prevFrom = fromIdx;
-    setFromIdx(toIdx);
-    setToIdx(prevFrom);
+    const prevFrom = fromAsset;
+    setFromAsset(toAsset);
+    setToAsset(prevFrom);
     setFromInput('');
   }
 
@@ -89,7 +98,13 @@ export default function SwapScreen({ onBack, colors }: { onBack: () => void; col
     setStatus(null);
     setSubmitting(true);
     try {
-      const res = await api.swap({ fromAsset: fromAsset.symbol, toAsset: toAsset.symbol, fromQty });
+      const res = await api.swap({
+        fromAsset: fromAsset.symbol,
+        toAsset: toAsset.symbol,
+        fromQty,
+        fromCoingeckoId: fromAsset.id,
+        toCoingeckoId: toAsset.id,
+      });
       setStatus(res.message);
       setStatusOk(true);
       await Promise.all([refreshUser(), load()]);
@@ -200,27 +215,14 @@ export default function SwapScreen({ onBack, colors }: { onBack: () => void; col
         <Text style={styles.trustNote}>Instant — swaps move between your holdings and settle immediately, no approval needed.</Text>
       </ScrollView>
 
-      <Modal visible={!!pickerFor} transparent animationType="fade" onRequestClose={() => setPickerFor(null)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Select Asset</Text>
-            {ASSETS.map((a, idx) => (
-              <TouchableOpacity
-                key={a.id}
-                style={styles.modalRow}
-                onPress={() => {
-                  if (pickerFor === 'from') setFromIdx(idx);
-                  else setToIdx(idx);
-                  setPickerFor(null);
-                }}>
-                <IconBadge name={a.id} size={28} glyphSize={12} />
-                <Text style={styles.modalRowText}>{a.symbol}</Text>
-                <Text style={styles.modalRowSub}>{(holdings[a.symbol] ?? 0).toFixed(4)} held</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
+      <AssetPickerModal
+        visible={!!pickerFor}
+        onClose={() => setPickerFor(null)}
+        onSelect={a => (pickerFor === 'from' ? setFromAsset(a) : setToAsset(a))}
+        colors={colors}
+        excludeSymbol={pickerFor === 'from' ? toAsset.symbol : fromAsset.symbol}
+        title={pickerFor === 'from' ? 'Swap from' : 'Swap to'}
+      />
 
       <ReceiptModal receipt={swapReceipt} onClose={() => setSwapReceipt(null)} colors={colors} />
     </View>
@@ -254,11 +256,5 @@ function getStyles(colors: ThemeColors) {
     cta: { backgroundColor: colors.signal, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center', marginTop: spacing.lg },
     ctaText: { color: colors.signalInk, fontWeight: '700', fontSize: 15 },
     trustNote: { color: colors.muted, fontSize: 10.5, textAlign: 'center', marginTop: spacing.md, lineHeight: 16 },
-    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: spacing.xl },
-    modalCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, borderWidth: 1, borderColor: colors.line, maxHeight: '70%' },
-    modalTitle: { color: colors.ink, fontSize: 16, fontWeight: '700', marginBottom: spacing.md },
-    modalRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.line },
-    modalRowText: { flex: 1, color: colors.ink, fontSize: 14, fontWeight: '700' },
-    modalRowSub: { color: colors.muted, fontSize: 11.5 },
   });
 }
