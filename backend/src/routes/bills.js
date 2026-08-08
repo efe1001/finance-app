@@ -173,17 +173,14 @@ router.post('/pay', requireAuth, async (req, res) => {
   // below must end in either marking the transaction Successful or
   // refunding it, never leaving it silently Pending with no way forward.
   const reference = `FA-BILL-${txnId}-${Date.now()}`;
-  const payload = {
-    country: 'NG',
-    customer: customerNumber,
-    amount: billAmount,
-    recurrence: 'ONCE',
-    type: item.billerCode,
-    biller_name: item.provider,
-    reference,
-  };
+  // Per Flutterwave's actual documented endpoint (confirmed against their
+  // official docs, not the /bills endpoint with a "type" field this was
+  // guessing at before) - biller and item are path segments, and the
+  // customer field is customer_id, not customer.
+  const payload = { country: 'NG', customer_id: customerNumber, amount: billAmount, reference };
+  const path = `/billers/${item.billerCode}/items/${item.itemCode}/payment`;
   try {
-    const { data } = await flw.post('/bills', payload);
+    const { data } = await flw.post(path, payload);
 
     const providerStatus = data.data?.status;
     if (providerStatus === 'successful' || providerStatus === 'success') {
@@ -205,7 +202,7 @@ router.post('/pay', requireAuth, async (req, res) => {
     throw new Error(data.data?.status || 'Purchase was not accepted');
   } catch (err) {
     const detail = err.response?.data?.message || err.message;
-    console.error('Bill payment failed. Payload sent:', JSON.stringify(payload), 'Flutterwave response:', JSON.stringify(err.response?.data));
+    console.error('Bill payment failed. Path:', path, 'Payload sent:', JSON.stringify(payload), 'Flutterwave response:', JSON.stringify(err.response?.data));
     const client2 = await pool.connect();
     try {
       await client2.query('BEGIN');
