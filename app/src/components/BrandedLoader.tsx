@@ -25,7 +25,7 @@ export default function BrandedLoader({ size = 56 }: { size?: number }) {
   return (
     <Animated.View style={[styles.wrap, { transform: [{ scale }], opacity }]}>
       <Image
-        source={require('../assets/logo-mark@3x.png')}
+        source={require('../assets/logo-mark.png')}
         style={{ width: size, height: size }}
         resizeMode="contain"
       />
