@@ -14,6 +14,12 @@ const flw = axios.create({
 // refetching on every request would be wasteful and slow. Refreshed lazily,
 // at most every 6 hours.
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+// Standard reseller margin, charged on top of the bill's face value (never on
+// Flutterwave's own fee) - Flutterwave itself is still only ever paid the
+// exact face amount, this stays with us. Shown to the user as a separate
+// line item rather than folded silently into the price.
+const MARKUP_RATE = 0.03;
 let catalogCache = { fetchedAt: 0, byItemCode: new Map(), byCategory: {} };
 
 // Flutterwave gives us a flat list of ~300 purchasable items with no clean
@@ -142,7 +148,8 @@ router.post('/pay', requireAuth, async (req, res) => {
     billAmount = Number(clientAmount);
     if (!billAmount || billAmount <= 0) return res.status(400).json({ error: 'amount is required for this biller' });
   }
-  const totalNgn = billAmount + item.fee;
+  const markup = Math.ceil(billAmount * MARKUP_RATE);
+  const totalNgn = billAmount + item.fee + markup;
 
   const client = await pool.connect();
   let txnId;

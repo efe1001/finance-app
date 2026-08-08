@@ -12,6 +12,11 @@ import ReceiptModal, { Receipt } from '../components/ReceiptModal';
 type BillItem = { itemCode: string; billerCode: string; name: string; provider: string; amount: number; fee: number; labelName: string };
 type Catalog = Record<string, Record<string, BillItem[]>>;
 
+// Must match MARKUP_RATE in backend/src/routes/bills.js - the backend is the
+// actual source of truth for what gets charged, this is only for showing the
+// user the right total before they submit.
+const MARKUP_RATE = 0.03;
+
 const CATEGORIES = [
   { label: 'Airtime', icon: 'airtime' },
   { label: 'Data', icon: 'data' },
@@ -83,7 +88,8 @@ export default function BillsScreen({ onBack, colors }: { onBack: () => void; co
   const itemsForProvider = provider ? (catalog[category]?.[provider] ?? []) : [];
   const isVariableAmount = item?.amount === 0;
   const billAmount = item ? (isVariableAmount ? Number(amountInput || '0') : item.amount) : 0;
-  const totalNgn = item ? billAmount + item.fee : 0;
+  const markup = item ? Math.ceil(billAmount * MARKUP_RATE) : 0;
+  const totalNgn = item ? billAmount + item.fee + markup : 0;
   const canSubmit = !!item && !!customerNumber && billAmount > 0;
 
   async function doSubmit() {
@@ -107,7 +113,8 @@ export default function BillsScreen({ onBack, colors }: { onBack: () => void; co
           { label: 'Date', value: new Date().toLocaleString() },
           { label: item.labelName, value: customerNumber },
           { label: 'Amount', value: formatNgn(billAmount) },
-          ...(item.fee > 0 ? [{ label: 'Fee', value: formatNgn(item.fee) }] : []),
+          ...(item.fee > 0 ? [{ label: 'Provider Fee', value: formatNgn(item.fee) }] : []),
+          { label: 'Service Fee', value: formatNgn(markup) },
           { label: 'Total', value: formatNgn(totalNgn) },
         ],
         footerNote: res.status === 'Pending' ? 'This may take a few minutes to complete.' : 'Purchase complete.',
@@ -235,8 +242,11 @@ export default function BillsScreen({ onBack, colors }: { onBack: () => void; co
                   </View>
                 )}
 
-                {item.fee > 0 && (
-                  <Text style={styles.feeNote}>+ {formatNgn(item.fee)} fee · total {formatNgn(totalNgn)}</Text>
+                {billAmount > 0 && (
+                  <Text style={styles.feeNote}>
+                    {item.fee > 0 ? `+ ${formatNgn(item.fee)} provider fee ` : ''}
+                    + {formatNgn(markup)} service fee · total {formatNgn(totalNgn)}
+                  </Text>
                 )}
 
                 {status && <Text style={[styles.status, statusOk ? styles.statusOk : styles.statusError]}>{status}</Text>}
