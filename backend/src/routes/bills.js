@@ -59,10 +59,29 @@ async function loadCatalog() {
 
   const { data } = await flw.get('/bill-categories?country=NG');
   const items = data.data || [];
+
+  // Confirmed by a real failed purchase: Flutterwave's catalog has stale
+  // item_codes reused across several *different* billers (e.g. item AT099
+  // is listed as both "9Mobile", "Airtel Nigeria" and "MTN VTU" at once) -
+  // the payment endpoint rejects these with "Invalid Biller selected" no
+  // matter which of the ambiguous names you picked it under. An item_code
+  // that maps to more than one distinct name is exactly that pattern, so
+  // it's excluded rather than gambled on.
+  const namesByItemCode = new Map();
+  for (const item of items) {
+    const name = item.name.trim();
+    if (!namesByItemCode.has(item.item_code)) namesByItemCode.set(item.item_code, new Set());
+    namesByItemCode.get(item.item_code).add(name);
+  }
+  const ambiguousItemCodes = new Set(
+    [...namesByItemCode.entries()].filter(([, names]) => names.size > 1).map(([code]) => code),
+  );
+
   const byItemCode = new Map();
   const byCategory = {};
 
   for (const item of items) {
+    if (ambiguousItemCodes.has(item.item_code)) continue;
     const category = classify(item);
     if (!category) continue;
 
@@ -75,9 +94,6 @@ async function loadCatalog() {
       fee: Number(item.fee),
       labelName: item.label_name,
     };
-    // A handful of item_codes repeat verbatim across near-duplicate rows in
-    // Flutterwave's catalog (e.g. the same network listed twice) - first one
-    // wins, they're interchangeable.
     if (!byItemCode.has(entry.itemCode)) byItemCode.set(entry.itemCode, entry);
 
     if (!byCategory[category]) byCategory[category] = {};
