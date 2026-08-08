@@ -60,6 +60,7 @@ export const badgeColors = {
   p2p: '#F97316',
   withdraw: '#F97316',
   swap: '#6366F1',
+  transfer: '#14B8A6',
   alerts: '#EAB308',
   bitcoin: '#F7931A',
   ethereum: '#627EEA',

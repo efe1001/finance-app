@@ -12,6 +12,8 @@ import { APP_VERSION } from '../appVersion';
 import { checkForUpdate, UpdateInfo } from '../updateCheck';
 import UpdateModal from '../components/UpdateModal';
 import ScreenHeader from '../components/ScreenHeader';
+import Avatar from '../components/Avatar';
+import AvatarPickerModal from '../components/AvatarPickerModal';
 import type { ScreenKey } from '../components/Drawer';
 
 type SubScreen =
@@ -88,7 +90,7 @@ function RootSettings({
   onGoTo: (s: SubScreen) => void;
   onNavigate: (key: ScreenKey) => void;
 }) {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { mode, toggleMode } = useTheme();
   const { currency } = useCurrency();
   const { balanceHidden, setBalanceHidden } = useBalanceVisibility();
@@ -98,6 +100,7 @@ function RootSettings({
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [checkedUpToDate, setCheckedUpToDate] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 
   useEffect(() => {
     checkPushPermissionGranted().then(setPushEnabled);
@@ -133,11 +136,15 @@ function RootSettings({
       <ScreenHeader title="Profile" onBack={onBack} colors={colors} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user?.name.charAt(0).toUpperCase()}</Text>
-          </View>
+          <TouchableOpacity onPress={() => setAvatarPickerOpen(true)}>
+            <Avatar user={user} size={48} colors={colors} />
+            <View style={styles.avatarEditBadge}>
+              <Text style={styles.avatarEditBadgeText}>✎</Text>
+            </View>
+          </TouchableOpacity>
           <View>
             <Text style={styles.name}>{user?.name}</Text>
+            {user?.username ? <Text style={styles.username}>@{user.username}</Text> : null}
             <Text style={styles.email}>{user?.email}</Text>
           </View>
         </View>
@@ -252,6 +259,7 @@ function RootSettings({
       </ScrollView>
 
       <UpdateModal update={update} onDismiss={() => setUpdate(null)} colors={colors} />
+      <AvatarPickerModal visible={avatarPickerOpen} onClose={() => setAvatarPickerOpen(false)} onSaved={refreshUser} colors={colors} />
     </View>
   );
 }
@@ -262,15 +270,17 @@ function ProfileScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
+  const [username, setUsername] = useState(user?.username ?? '');
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [statusOk, setStatusOk] = useState(false);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 
   async function save() {
     setSaving(true);
     setStatus(null);
     try {
-      await api.updateProfile({ name, email, phone });
+      await api.updateProfile({ name, email, phone, username });
       await refreshUser();
       setStatus('Profile updated.');
       setStatusOk(true);
@@ -286,6 +296,25 @@ function ProfileScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
     <View style={styles.screen}>
       <ScreenHeader title="My Profile" onBack={onBack} colors={colors} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        <TouchableOpacity style={styles.avatarEditRow} onPress={() => setAvatarPickerOpen(true)}>
+          <Avatar user={user} size={72} colors={colors} />
+          <Text style={styles.avatarEditLink}>Change avatar</Text>
+        </TouchableOpacity>
+        <View style={styles.field}>
+          <Text style={styles.flabel}>USERNAME</Text>
+          <View style={styles.usernameRow}>
+            <Text style={styles.usernamePrefix}>@</Text>
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              value={username}
+              onChangeText={t => setUsername(t.replace(/[^a-zA-Z0-9_]/g, ''))}
+              autoCapitalize="none"
+              placeholder="username"
+              placeholderTextColor={colors.muted}
+              maxLength={20}
+            />
+          </View>
+        </View>
         <View style={styles.field}>
           <Text style={styles.flabel}>FULL NAME</Text>
           <TextInput style={styles.input} value={name} onChangeText={setName} placeholderTextColor={colors.muted} />
@@ -310,6 +339,7 @@ function ProfileScreen({ onBack, colors }: { onBack: () => void; colors: ThemeCo
           <Text style={styles.ctaText}>{saving ? 'Saving…' : 'Save Changes'}</Text>
         </TouchableOpacity>
       </ScrollView>
+      <AvatarPickerModal visible={avatarPickerOpen} onClose={() => setAvatarPickerOpen(false)} onSaved={refreshUser} colors={colors} />
     </View>
   );
 }
@@ -559,9 +589,14 @@ function getStyles(colors: ThemeColors) {
     screen: { flex: 1, backgroundColor: colors.bg },
     content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
     profileCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.lg },
-    avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.signal, alignItems: 'center', justifyContent: 'center' },
-    avatarText: { color: colors.signalInk, fontWeight: '700', fontSize: 18 },
+    avatarEditBadge: { position: 'absolute', right: -2, bottom: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.signal, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surface },
+    avatarEditBadgeText: { color: colors.signalInk, fontSize: 9, fontWeight: '700' },
+    avatarEditRow: { alignItems: 'center', marginBottom: spacing.lg },
+    avatarEditLink: { color: colors.signal, fontSize: 12.5, fontWeight: '700', marginTop: spacing.sm },
+    usernameRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs },
+    usernamePrefix: { color: colors.muted, fontSize: 16, fontWeight: '600', marginRight: 2 },
     name: { color: colors.ink, fontSize: 15, fontWeight: '700' },
+    username: { color: colors.muted, fontSize: 12, marginTop: 1 },
     email: { color: colors.muted, fontSize: 12, marginTop: 2 },
     sectionHead: { color: colors.muted, fontSize: 11, letterSpacing: 0.5, marginBottom: spacing.sm, marginTop: spacing.sm },
     card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, marginBottom: spacing.lg, overflow: 'hidden', paddingHorizontal: spacing.md },

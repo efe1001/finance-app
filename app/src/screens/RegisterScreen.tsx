@@ -23,6 +23,7 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [reveal, setReveal] = useState(false);
@@ -31,11 +32,12 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
   const [countryModalOpen, setCountryModalOpen] = useState(false);
 
   const mismatch = password.length > 0 && confirmPassword.length > 0 && password !== confirmPassword;
-  const canSubmit = !!name && !!email && !!phone && password.length >= 6 && password === confirmPassword;
+  const usernameValid = /^[a-zA-Z0-9_]{3,20}$/.test(username);
+  const canSubmit = !!name && !!email && !!phone && usernameValid && password.length >= 6 && password === confirmPassword;
 
   async function submit() {
     if (!canSubmit) return;
-    await register(name, email, password, phone, referralCode, country?.name);
+    await register(name, email, password, phone, username, referralCode, country?.name);
     if (country) setCurrency(country.currency);
   }
 
@@ -62,6 +64,22 @@ export default function RegisterScreen({ onGoToLogin }: { onGoToLogin: () => voi
             autoCapitalize="none"
             keyboardType="email-address"
           />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>USERNAME</Text>
+          <TextInput
+            style={styles.input}
+            value={username}
+            onChangeText={t => setUsername(t.replace(/[^a-zA-Z0-9_]/g, ''))}
+            placeholder="e.g. efe_dev"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="none"
+            maxLength={20}
+          />
+          {!!username && !usernameValid && (
+            <Text style={styles.mismatch}>3-20 characters, letters, numbers and underscores only.</Text>
+          )}
         </View>
 
         <View style={styles.field}>

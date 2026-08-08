@@ -166,6 +166,18 @@ async function init() {
     ALTER TABLE holdings ADD COLUMN IF NOT EXISTS coingecko_id TEXT;
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS coingecko_id TEXT;
 
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+    -- Case-insensitive uniqueness ("Efe" and "efe" would otherwise both be
+    -- takeable) via a partial index, since a plain UNIQUE column would still
+    -- allow that collision and would also reject the many existing accounts
+    -- that don't have a username yet (NULL) if it weren't partial.
+    CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_idx ON users (LOWER(username)) WHERE username IS NOT NULL;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_kind TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_value TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_data TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_mime TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_updated_at TIMESTAMP;
+
     UPDATE users SET referral_code = 'FA' || LPAD(id::text, 6, '0') WHERE referral_code IS NULL;
   `);
 }

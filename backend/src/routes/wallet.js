@@ -161,6 +161,112 @@ router.post('/swap', requireAuth, async (req, res) => {
   res.status(201).json({ status: 'Successful', toQty, message: `Swapped for ${toQty.toFixed(6)} ${toAsset}.` });
 });
 
+// Lets the sender confirm who they're paying before it actually moves,
+// mirroring the bank-account-name resolve step withdrawals already do -
+// same safety idea, just resolving a username/email/phone instead of an
+// account number.
+router.get('/transfer/resolve', requireAuth, async (req, res) => {
+  const handle = String(req.query.handle || '').trim().replace(/^@/, '');
+  if (!handle) return res.status(400).json({ error: 'handle is required' });
+  const { rows } = await pool.query(
+    `SELECT id, name, username FROM users
+     WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($1) OR phone = $1
+     LIMIT 1`,
+    [handle],
+  );
+  const u = rows[0];
+  if (!u) return res.status(404).json({ error: "We couldn't find a user with that username, email or phone number." });
+  if (u.id === req.user.id) return res.status(400).json({ error: "That's your own account" });
+  res.json({ name: u.name, username: u.username });
+});
+
+// User-to-user NGN transfer - unlike deposits/withdrawals this never leaves
+// the platform and has no external counterparty to verify, so it settles
+// immediately (both balances updated in one transaction) instead of sitting
+// in the admin approval queue. The recipient's balance is ordinary
+// wallet_balance_ngn, so it's withdrawable to their bank the same way any
+// other funds are - no separate "transferred funds" bucket.
+router.post('/transfer', requireAuth, async (req, res) => {
+  const { recipient, amountNgn } = req.body;
+  if (!recipient || !amountNgn || amountNgn <= 0) {
+    return res.status(400).json({ error: 'recipient and a positive amountNgn are required' });
+  }
+
+  const handle = String(recipient).trim().replace(/^@/, '');
+  if (!handle) return res.status(400).json({ error: 'recipient is required' });
+
+  const { rows: recipientRows } = await pool.query(
+    `SELECT id, name, username, fcm_token FROM users
+     WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($1) OR phone = $1
+     LIMIT 1`,
+    [handle],
+  );
+  const recipientUser = recipientRows[0];
+  if (!recipientUser) {
+    return res.status(404).json({ error: "We couldn't find a user with that username, email or phone number." });
+  }
+  if (recipientUser.id === req.user.id) {
+    return res.status(400).json({ error: "You can't transfer money to yourself" });
+  }
+
+  // Catches an impatient double-tap sending the same amount to the same
+  // person twice in a row - this settles instantly with no approval step to
+  // catch it later the way a deposit or withdrawal would.
+  const { rows: dupeRows } = await pool.query(
+    `SELECT id FROM transactions
+     WHERE user_id = $1 AND type = 'transfer' AND amount_ngn = $2 AND address = $3
+       AND created_at > NOW() - INTERVAL '30 seconds'`,
+    [req.user.id, -amountNgn, `to:${recipientUser.id}`],
+  );
+  if (dupeRows.length) {
+    return res.status(409).json({ error: 'That transfer just went through — no need to send it again.' });
+  }
+
+  let senderName = '';
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: senderRows } = await client.query('SELECT wallet_balance_ngn, name FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
+    senderName = senderRows[0].name;
+    const { rows: pendingRows } = await client.query(
+      "SELECT COALESCE(SUM(amount_ngn), 0) AS pending_debits FROM transactions WHERE user_id = $1 AND status = 'Pending' AND amount_ngn < 0",
+      [req.user.id],
+    );
+    const available = Number(senderRows[0].wallet_balance_ngn) + Number(pendingRows[0].pending_debits);
+    if (available < amountNgn) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Insufficient balance' });
+    }
+
+    await client.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn - $1 WHERE id = $2', [amountNgn, req.user.id]);
+    await client.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE id = $2', [amountNgn, recipientUser.id]);
+
+    await client.query(
+      `INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, address) VALUES
+        ($1, 'transfer', $2, $3, $4, 'Successful', $5),
+        ($6, 'transfer', $7, $8, $9, 'Successful', $10)`,
+      [
+        req.user.id, `Sent to ${recipientUser.name}`, recipientUser.username ? `@${recipientUser.username}` : recipientUser.name, -amountNgn, `to:${recipientUser.id}`,
+        recipientUser.id, `Received from ${senderName}`, `From ${senderName}`, amountNgn, `from:${req.user.id}`,
+      ],
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  sendPush(recipientUser.fcm_token, 'Money received', `${senderName || 'Someone'} sent you ₦${Number(amountNgn).toLocaleString()}.`);
+
+  res.status(201).json({
+    status: 'Successful',
+    recipientName: recipientUser.name,
+    message: `₦${Number(amountNgn).toLocaleString()} sent to ${recipientUser.name}.`,
+  });
+});
+
 router.post('/deposit', requireAuth, async (req, res) => {
   const { amountNgn } = req.body;
   if (!amountNgn || amountNgn <= 0) {

@@ -18,6 +18,7 @@ export type TxnLike = {
 // differently at a glance instead of an identical placeholder dot.
 export function txnIconKey(t: TxnLike): string {
   if (t.type === 'swap') return 'swap';
+  if (t.type === 'transfer') return 'transfer';
   if (t.type === 'deposit') return 'fund';
   if (t.type === 'withdrawal') return 'withdraw';
   if (t.type === 'crypto') return 'trade';
@@ -54,8 +55,11 @@ export function buildTxnReceipt(t: TxnLike, formatNgn: (n: number) => string): R
     { label: 'Date', value: t.created_at ? new Date(t.created_at).toLocaleString() : '—' },
     { label: isSwap ? 'Swapped' : 'Amount', value: isSwap ? (t.subtitle ?? '—') : formatNgn(Math.abs(t.amount_ngn)) },
   ];
-  if (!isSwap && t.subtitle) rows.push({ label: 'Details', value: t.subtitle });
-  if (t.address) rows.push({ label: 'Reference / Address', value: t.address });
+  if (!isSwap && t.subtitle) rows.push({ label: t.type === 'transfer' ? (t.amount_ngn < 0 ? 'To' : 'From') : 'Details', value: t.subtitle });
+  // A transfer's address column holds an internal "to:5" / "from:3" dedupe
+  // marker, not a real address - showing it would just leak an implementation
+  // detail into the receipt.
+  if (t.address && t.type !== 'transfer') rows.push({ label: 'Reference / Address', value: t.address });
   rows.push({ label: 'Reference ID', value: `#${t.id}` });
   return {
     heading: t.title,

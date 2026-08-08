@@ -36,11 +36,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
+export function avatarUrl(userId: number) {
+  return `${BASE_URL}/auth/avatar/${userId}`;
+}
+
 export const api = {
-  register: (name: string, email: string, password: string, phone: string, referralCode?: string, country?: string) =>
+  register: (name: string, email: string, password: string, phone: string, username: string, referralCode?: string, country?: string) =>
     request<{ token: string; user: any }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password, phone, referralCode: referralCode || undefined, country: country || undefined }),
+      body: JSON.stringify({ name, email, password, phone, username, referralCode: referralCode || undefined, country: country || undefined }),
     }),
   login: (email: string, password: string) =>
     request<{ token: string; user: any }>('/auth/login', {
@@ -48,8 +52,12 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => request<any>('/auth/me'),
-  updateProfile: (body: { name?: string; email?: string; phone?: string }) =>
+  updateProfile: (body: { name?: string; email?: string; phone?: string; username?: string }) =>
     request<any>('/auth/profile', { method: 'PUT', body: JSON.stringify(body) }),
+  setAvatarPreset: (value: string) =>
+    request<any>('/auth/avatar', { method: 'POST', body: JSON.stringify({ kind: 'preset', value }) }),
+  uploadAvatar: (data: string, mime: string) =>
+    request<any>('/auth/avatar', { method: 'POST', body: JSON.stringify({ kind: 'upload', data, mime }) }),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<{ ok: true }>('/auth/change-password', {
       method: 'POST',
@@ -107,6 +115,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  transfer: (body: { recipient: string; amountNgn: number }) =>
+    request<{ status: string; recipientName: string; message: string }>('/wallet/transfer', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  resolveTransferRecipient: (handle: string) =>
+    request<{ name: string; username: string | null }>(`/wallet/transfer/resolve?handle=${encodeURIComponent(handle)}`),
 
   flutterwave: {
     initiateDeposit: (amountNgn: number) =>

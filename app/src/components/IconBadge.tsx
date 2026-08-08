@@ -29,6 +29,7 @@ const GLYPHS: Record<string, string> = {
   history: '↻',
   withdraw: '↗',
   swap: '⇄',
+  transfer: '↦',
   alerts: '◔',
   bitcoin: '₿',
   ethereum: 'Ξ',

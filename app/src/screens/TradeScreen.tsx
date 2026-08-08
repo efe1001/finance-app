@@ -12,26 +12,10 @@ import ReceiptModal, { Receipt } from '../components/ReceiptModal';
 import BrandedLoader from '../components/BrandedLoader';
 import AssetPickerModal, { PickedAsset } from '../components/AssetPickerModal';
 import { useRefresh } from '../data/RefreshContext';
+import { readFileAsBase64 } from '../utils/fileToBase64';
 
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 const NGN_PER_USD = 1631;
-
-function readFileAsBase64(uri: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    fetch(uri)
-      .then(res => res.blob())
-      .then(blob => {
-        const reader = new FileReader();
-        reader.onerror = () => reject(new Error('Could not read file'));
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1] ?? '');
-        };
-        reader.readAsDataURL(blob);
-      })
-      .catch(reject);
-  });
-}
 
 const ASSETS = [
   { id: 'bitcoin', symbol: 'BTC' },

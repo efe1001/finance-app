@@ -5,6 +5,7 @@ type User = {
   id: number;
   name: string;
   email: string;
+  username: string | null;
   walletBalanceNgn: number;
   isAdmin: boolean;
   referralCode: string;
@@ -15,6 +16,9 @@ type User = {
   payoutBankName: string | null;
   payoutAccountNumber: string | null;
   payoutAccountName: string | null;
+  avatarKind: string | null;
+  avatarValue: string | null;
+  avatarUpdatedAt: string | null;
 };
 
 type AuthContextValue = {
@@ -22,7 +26,7 @@ type AuthContextValue = {
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<User>;
-  register: (name: string, email: string, password: string, phone: string, referralCode?: string, country?: string) => Promise<void>;
+  register: (name: string, email: string, password: string, phone: string, username: string, referralCode?: string, country?: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 };
@@ -50,11 +54,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string, phone: string, referralCode?: string, country?: string) => {
+  const register = useCallback(async (name: string, email: string, password: string, phone: string, username: string, referralCode?: string, country?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.register(name, email, password, phone, referralCode, country);
+      const res = await api.register(name, email, password, phone, username, referralCode, country);
       setAuthToken(res.token);
       setUser(res.user);
     } catch (e: any) {

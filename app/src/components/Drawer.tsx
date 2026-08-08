@@ -9,6 +9,7 @@ import {
   Pressable,
 } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
+import Avatar, { AvatarUser } from './Avatar';
 
 const DRAWER_WIDTH = Math.min(300, Dimensions.get('window').width * 0.8);
 
@@ -22,6 +23,7 @@ export type ScreenKey =
   | 'deposit'
   | 'withdraw'
   | 'swap'
+  | 'transfer'
   | 'settings'
   | 'payment'
   | 'admin';
@@ -31,6 +33,7 @@ const NAV_ITEMS: { key: ScreenKey; label: string; icon: string }[] = [
   { key: 'wallet', label: 'Wallet', icon: '◈' },
   { key: 'trade', label: 'Trade', icon: '⇅' },
   { key: 'swap', label: 'Swap', icon: '⇄' },
+  { key: 'transfer', label: 'Send Money', icon: '↦' },
   { key: 'p2p', label: 'P2P · Direct', icon: '⇄' },
   { key: 'giftcards', label: 'Gift Cards', icon: '🎁' },
   { key: 'bills', label: 'Bills & Recharge', icon: '▤' },
@@ -44,7 +47,7 @@ export default function Drawer({
   onClose,
   current,
   onNavigate,
-  userName,
+  user,
   userEmail,
   onLogout,
   colors,
@@ -53,7 +56,7 @@ export default function Drawer({
   onClose: () => void;
   current: ScreenKey;
   onNavigate: (key: ScreenKey) => void;
-  userName: string;
+  user: AvatarUser & { username?: string | null };
   userEmail: string;
   onLogout: () => void;
   colors: ThemeColors;
@@ -84,10 +87,11 @@ export default function Drawer({
       </Animated.View>
       <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
         <View style={styles.header}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{userName.charAt(0).toUpperCase()}</Text>
+          <View style={styles.avatarWrap}>
+            <Avatar user={user} size={48} colors={colors} />
           </View>
-          <Text style={styles.name}>{userName}</Text>
+          <Text style={styles.name}>{user.name}</Text>
+          {user.username ? <Text style={styles.username}>@{user.username}</Text> : null}
           <Text style={styles.email}>{userEmail}</Text>
         </View>
 
@@ -131,17 +135,9 @@ function getStyles(colors: ThemeColors) {
       paddingHorizontal: spacing.lg,
     },
     header: { marginBottom: spacing.xl, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.line },
-    avatar: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: colors.signal,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: spacing.sm,
-    },
-    avatarText: { color: colors.signalInk, fontWeight: '700', fontSize: 18 },
+    avatarWrap: { marginBottom: spacing.sm },
     name: { color: colors.ink, fontSize: 16, fontWeight: '700' },
+    username: { color: colors.muted, fontSize: 12, marginTop: 1 },
     email: { color: colors.muted, fontSize: 12, marginTop: 2 },
     nav: { flex: 1 },
     navItem: {
