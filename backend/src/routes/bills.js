@@ -157,16 +157,17 @@ router.post('/pay', requireAuth, async (req, res) => {
   // below must end in either marking the transaction Successful or
   // refunding it, never leaving it silently Pending with no way forward.
   const reference = `FA-BILL-${txnId}-${Date.now()}`;
+  const payload = {
+    country: 'NG',
+    customer: customerNumber,
+    amount: billAmount,
+    recurrence: 'ONCE',
+    type: item.itemCode,
+    biller_name: item.provider,
+    reference,
+  };
   try {
-    const { data } = await flw.post('/bills', {
-      country: 'NG',
-      customer: customerNumber,
-      amount: billAmount,
-      recurrence: 'ONCE',
-      type: item.itemCode,
-      biller_name: item.provider,
-      reference,
-    });
+    const { data } = await flw.post('/bills', payload);
 
     const providerStatus = data.data?.status;
     if (providerStatus === 'successful' || providerStatus === 'success') {
@@ -188,6 +189,7 @@ router.post('/pay', requireAuth, async (req, res) => {
     throw new Error(data.data?.status || 'Purchase was not accepted');
   } catch (err) {
     const detail = err.response?.data?.message || err.message;
+    console.error('Bill payment failed. Payload sent:', JSON.stringify(payload), 'Flutterwave response:', JSON.stringify(err.response?.data));
     const client2 = await pool.connect();
     try {
       await client2.query('BEGIN');
