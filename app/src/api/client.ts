@@ -129,6 +129,21 @@ export const api = {
     receiptFilename?: string;
   }) => request<any>('/giftcards/submit', { method: 'POST', body: JSON.stringify(body) }),
 
+  bills: {
+    categories: () =>
+      request<
+        Record<
+          string,
+          Record<
+            string,
+            { itemCode: string; billerCode: string; name: string; provider: string; amount: number; fee: number; labelName: string }[]
+          >
+        >
+      >('/bills/categories'),
+    pay: (body: { itemCode: string; customerNumber: string; amount?: number }) =>
+      request<{ status: string; message: string }>('/bills/pay', { method: 'POST', body: JSON.stringify(body) }),
+  },
+
   p2pListings: () => request<any[]>('/p2p/listings'),
   myP2pListings: () => request<any[]>('/p2p/listings/mine'),
   createP2pListing: (body: {
