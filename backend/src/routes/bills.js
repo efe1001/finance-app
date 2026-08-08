@@ -181,17 +181,21 @@ router.post('/pay', requireAuth, async (req, res) => {
   const path = `/billers/${item.billerCode}/items/${item.itemCode}/payment`;
   try {
     const { data } = await flw.post(path, payload);
+    console.log('Bill payment raw response:', JSON.stringify(data));
 
-    const providerStatus = data.data?.status;
-    if (providerStatus === 'successful' || providerStatus === 'success') {
-      await pool.query(
-        "UPDATE transactions SET status = 'Successful', provider_ref = $1 WHERE id = $2",
-        [data.data?.reference || reference, txnId],
-      );
-      return res.status(201).json({ status: 'Successful', message: `${item.name} purchase complete.` });
+    // A 2xx HTTP response means Flutterwave accepted the request - axios
+    // already throws on non-2xx, and every confirmed real rejection this
+    // session came back that way (an HTTP error, caught below). The exact
+    // shape of a *successful* response here is still being confirmed, so
+    // rather than require a specific status string we don't yet know for
+    // certain and risk silently refunding a purchase that actually went
+    // through (as happened once already), anything not explicitly flagged
+    // failed/pending is treated as successful.
+    const providerStatus = (data.data?.status || data.status || '').toLowerCase();
+    if (['failed', 'error', 'cancelled', 'reversed'].includes(providerStatus)) {
+      throw new Error(providerStatus);
     }
-
-    if (providerStatus === 'pending') {
+    if (providerStatus === 'pending' || providerStatus === 'in-progress') {
       await pool.query(
         "UPDATE transactions SET provider_ref = $1 WHERE id = $2",
         [data.data?.reference || reference, txnId],
@@ -199,7 +203,11 @@ router.post('/pay', requireAuth, async (req, res) => {
       return res.status(202).json({ status: 'Pending', message: `${item.name} is processing - this can take a few minutes.` });
     }
 
-    throw new Error(data.data?.status || 'Purchase was not accepted');
+    await pool.query(
+      "UPDATE transactions SET status = 'Successful', provider_ref = $1 WHERE id = $2",
+      [data.data?.reference || reference, txnId],
+    );
+    return res.status(201).json({ status: 'Successful', message: `${item.name} purchase complete.` });
   } catch (err) {
     const detail = err.response?.data?.message || err.message;
     console.error('Bill payment failed. Path:', path, 'Payload sent:', JSON.stringify(payload), 'Flutterwave response:', JSON.stringify(err.response?.data));
