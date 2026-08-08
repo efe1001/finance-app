@@ -1,4 +1,4 @@
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, Platform, PermissionsAndroid } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getMessaging,
@@ -8,6 +8,23 @@ import {
   onMessage,
   AuthorizationStatus,
 } from '@react-native-firebase/messaging';
+
+// On Android, @react-native-firebase/messaging's requestPermission() is a
+// no-op stub in this version - it always resolves "authorized" without ever
+// calling into Android's actual runtime permission system, so no system
+// dialog ever appears and the permission never actually gets granted. Its
+// hasPermission() check is accurate (reads NotificationManagerCompat
+// directly), just not the request. React Native's own PermissionsAndroid
+// API is what actually triggers the real POST_NOTIFICATIONS prompt.
+async function requestOSPermission(): Promise<boolean> {
+  if (Platform.OS === 'android') {
+    if (Number(Platform.Version) < 33) return true; // no runtime permission exists before Android 13
+    const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    return result === PermissionsAndroid.RESULTS.GRANTED;
+  }
+  const status = await requestPermission(getMessaging());
+  return status === AuthorizationStatus.AUTHORIZED || status === AuthorizationStatus.PROVISIONAL;
+}
 
 const PROMPT_SHOWN_KEY = 'pushPromptShown';
 
@@ -68,12 +85,10 @@ function attachForegroundListener() {
 // toggle, the first-run prompt) can react if the user says no.
 export async function requestPushPermissionAndToken(onToken: (token: string) => void): Promise<boolean> {
   try {
-    const messaging = getMessaging();
-    const authStatus = await requestPermission(messaging);
-    const enabled =
-      authStatus === AuthorizationStatus.AUTHORIZED || authStatus === AuthorizationStatus.PROVISIONAL;
-    if (!enabled) return false;
+    const granted = await requestOSPermission();
+    if (!granted) return false;
 
+    const messaging = getMessaging();
     const token = await getToken(messaging);
     onToken(token);
     attachForegroundListener();
