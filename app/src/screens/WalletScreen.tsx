@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Animated } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Animated, Alert } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -23,6 +23,7 @@ type Transaction = {
   asset?: string | null;
   qty?: number | null;
   created_at?: string;
+  provider_ref?: string | null;
 };
 
 const HISTORY_FILTERS: { key: string; label: string }[] = [
@@ -80,7 +81,24 @@ export default function WalletScreen({
   const PAGE_SIZE = 20;
 
   function openReceipt(t: Transaction) {
-    setTxnReceipt(buildTxnReceipt(t, formatNgn));
+    const receipt = buildTxnReceipt(t, formatNgn);
+    if (t.type === 'deposit' && t.status === 'Pending' && t.provider_ref) {
+      receipt.actionLabel = 'Check Status';
+      receipt.onAction = async () => {
+        try {
+          const res = await api.flutterwave.recheckDeposit(t.provider_ref!);
+          if (res.outcome === 'success') Alert.alert('Confirmed', 'Payment confirmed — your wallet has been credited.');
+          else if (res.outcome === 'pending') Alert.alert('Still processing', "Your bank hasn't confirmed this yet — check back in a few minutes.");
+          else if (res.outcome === 'failed') Alert.alert('Payment failed', 'This payment did not go through.');
+          else Alert.alert('Checked', 'No update yet.');
+          setTxnReceipt(null);
+          load();
+        } catch (e: any) {
+          Alert.alert('Error', e.message);
+        }
+      };
+    }
+    setTxnReceipt(receipt);
   }
 
   const load = useCallback(async () => {

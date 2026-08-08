@@ -20,6 +20,19 @@ app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody =
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+// Render's free tier doesn't publish a fixed outbound IP anywhere, so this is
+// the only reliable way to know what IP Flutterwave (or any other outbound
+// API) actually sees from this server - needed once, to whitelist it.
+app.get('/debug/outbound-ip', async (req, res) => {
+  try {
+    const axios = require('axios');
+    const { data } = await axios.get('https://api.ipify.org?format=json');
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/p2p', p2pRoutes);

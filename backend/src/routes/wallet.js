@@ -89,6 +89,21 @@ router.post('/deposit', requireAuth, async (req, res) => {
     });
   }
 
+  // A flaky connection or an impatient double-tap can submit the same manual
+  // transfer claim twice - each one looks like a legitimate distinct request
+  // to an admin reviewing the queue, so the guard has to be here rather than
+  // relying on the approval step (which is already correctly idempotent
+  // per-row, that was never the actual gap).
+  const { rows: dupeRows } = await pool.query(
+    `SELECT id FROM transactions
+     WHERE user_id = $1 AND type = 'deposit' AND status = 'Pending' AND amount_ngn = $2
+       AND created_at > NOW() - INTERVAL '10 minutes'`,
+    [req.user.id, amountNgn],
+  );
+  if (dupeRows.length) {
+    return res.status(409).json({ error: 'You already have a matching deposit awaiting approval — no need to submit it again.' });
+  }
+
   await pool.query(
     'INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status) VALUES ($1, $2, $3, $4, $5, $6)',
     [req.user.id, 'deposit', 'Wallet Funding', 'Card / Bank Transfer · awaiting approval', amountNgn, 'Pending'],

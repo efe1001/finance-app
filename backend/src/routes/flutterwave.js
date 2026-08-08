@@ -53,61 +53,143 @@ router.post('/initiate', requireAuth, async (req, res) => {
   }
 });
 
-// Flutterwave redirects the user's browser here after payment.
-router.get('/callback', async (req, res) => {
-  const { status, tx_ref, transaction_id } = req.query;
+// Shared by the redirect callback, the webhook, and the manual recheck
+// endpoint - all three are really just "find out what Flutterwave actually
+// thinks happened, and act on it exactly once." Bank transfers in particular
+// often aren't confirmed yet at the moment the browser redirects back, so
+// trusting only the redirect's own query params (as the old code did) meant
+// a transfer that settled seconds later than the mobile UI it looks like
+// it's watching would show a wallet that never updates - even though
+// Flutterwave has already accepted the money. Re-verifying by reference
+// against Flutterwave's own records, from any of the three entry points, is
+// what actually closes that gap.
+async function resolveDeposit(txRef) {
+  if (!txRef) return { outcome: 'error', message: 'No reference supplied' };
 
-  res.set('Content-Type', 'text/html');
-
-  if (status !== 'successful' || !transaction_id) {
-    return res.send(htmlPage('Payment not completed', 'You can close this window and return to the app.'));
+  let txn;
+  try {
+    const { data } = await flw.get(`/transactions/verify_by_reference?tx_ref=${encodeURIComponent(txRef)}`);
+    txn = data.data;
+  } catch (err) {
+    return { outcome: 'error', message: err.response?.data?.message || err.message };
   }
 
+  if (!txn) return { outcome: 'error', message: 'Flutterwave has no record of this payment' };
+
+  if (txn.status === 'pending') return { outcome: 'pending' };
+
+  if (txn.status !== 'successful' || txn.currency !== 'NGN') {
+    const { rows } = await pool.query(
+      "UPDATE transactions SET status = 'Rejected', admin_note = $1 WHERE provider_ref = $2 AND status = 'Pending' RETURNING id, user_id, amount_ngn",
+      [`Flutterwave: ${txn.status}`, txRef],
+    );
+    if (rows[0]) {
+      const { rows: u } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [rows[0].user_id]);
+      sendPush(u[0]?.fcm_token, 'Deposit failed', `Your ₦${Number(rows[0].amount_ngn).toLocaleString()} deposit didn't go through.`);
+    }
+    return { outcome: 'failed' };
+  }
+
+  const client = await pool.connect();
+  let pending;
   try {
-    const { data } = await flw.get(`/transactions/${transaction_id}/verify`);
-    const txn = data.data;
-
-    if (txn.status !== 'successful' || txn.currency !== 'NGN') {
-      return res.send(htmlPage('Payment verification failed', 'Please contact support if you were charged.'));
-    }
-
-    const client = await pool.connect();
-    let pending;
-    try {
-      await client.query('BEGIN');
-      const { rows } = await client.query(
-        "SELECT * FROM transactions WHERE provider_ref = $1 AND status = 'Pending' FOR UPDATE",
-        [tx_ref],
-      );
-      pending = rows[0];
-      if (!pending) {
-        await client.query('ROLLBACK');
-        return res.send(htmlPage('Already processed', 'This payment was already confirmed. You can close this window.'));
-      }
-      if (Number(txn.amount) < Number(pending.amount_ngn)) {
-        await client.query('ROLLBACK');
-        return res.send(htmlPage('Amount mismatch', 'Please contact support — the paid amount did not match.'));
-      }
-
-      await client.query("UPDATE transactions SET status = 'Successful' WHERE id = $1", [pending.id]);
-      await client.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE id = $2', [
-        pending.amount_ngn,
-        pending.user_id,
-      ]);
-      await client.query('COMMIT');
-    } catch (err) {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      "SELECT * FROM transactions WHERE provider_ref = $1 AND status = 'Pending' FOR UPDATE",
+      [txRef],
+    );
+    pending = rows[0];
+    if (!pending) {
       await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
+      return { outcome: 'already_processed' };
+    }
+    if (Number(txn.amount) < Number(pending.amount_ngn)) {
+      await client.query("UPDATE transactions SET status = 'Rejected', admin_note = 'Amount mismatch' WHERE id = $1", [pending.id]);
+      await client.query('COMMIT');
+      return { outcome: 'amount_mismatch' };
     }
 
-    const { rows: userRows } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [pending.user_id]);
-    sendPush(userRows[0]?.fcm_token, 'Wallet funded', `₦${Number(pending.amount_ngn).toLocaleString()} has been added to your wallet.`);
-
-    res.send(htmlPage('Payment successful', 'Your wallet has been credited. You can close this window and return to the app.'));
+    await client.query("UPDATE transactions SET status = 'Successful' WHERE id = $1", [pending.id]);
+    await client.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE id = $2', [
+      pending.amount_ngn,
+      pending.user_id,
+    ]);
+    await client.query('COMMIT');
   } catch (err) {
-    res.send(htmlPage('Something went wrong', 'Please contact support if you were charged.'));
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  const { rows: userRows } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [pending.user_id]);
+  sendPush(userRows[0]?.fcm_token, 'Wallet funded', `₦${Number(pending.amount_ngn).toLocaleString()} has been added to your wallet.`);
+
+  return { outcome: 'success', pending };
+}
+
+// Flutterwave redirects the user's browser here after payment.
+router.get('/callback', async (req, res) => {
+  const { tx_ref } = req.query;
+  res.set('Content-Type', 'text/html');
+
+  let result;
+  try {
+    result = await resolveDeposit(tx_ref);
+  } catch (err) {
+    return res.send(htmlPage('Something went wrong', 'Please contact support if you were charged.'));
+  }
+
+  const pages = {
+    success: htmlPage('Payment successful', 'Your wallet has been credited. You can close this window and return to the app.'),
+    pending: htmlPage('Payment processing', "We're still confirming this with your bank - it usually takes a few minutes. Your wallet will update automatically and you'll get a notification, no need to retry."),
+    failed: htmlPage('Payment failed', 'This payment was not successful. You can close this window and return to the app.'),
+    amount_mismatch: htmlPage('Amount mismatch', 'Please contact support — the paid amount did not match.'),
+    already_processed: htmlPage('Already processed', 'This payment was already confirmed. You can close this window.'),
+    error: htmlPage('Something went wrong', 'Please contact support if you were charged.'),
+  };
+  res.send(pages[result.outcome] || pages.error);
+});
+
+// Flutterwave calls this server-to-server when a transaction's status
+// changes - the only way to catch a bank transfer that confirms after the
+// user has already closed the browser tab from /callback. Requires
+// FLUTTERWAVE_WEBHOOK_SECRET to be set to the same value configured in the
+// Flutterwave dashboard's webhook settings; without it this safely no-ops
+// rather than trusting unverified input that could credit arbitrary wallets.
+router.post('/webhook', express.json(), async (req, res) => {
+  const expectedSecret = process.env.FLUTTERWAVE_WEBHOOK_SECRET;
+  if (!expectedSecret) {
+    console.warn('Flutterwave webhook received but FLUTTERWAVE_WEBHOOK_SECRET is not configured - ignoring.');
+    return res.status(501).send('Webhook not configured');
+  }
+  if (req.headers['verif-hash'] !== expectedSecret) {
+    return res.status(401).send('Invalid signature');
+  }
+
+  const txRef = req.body?.data?.tx_ref || req.body?.txRef;
+  try {
+    await resolveDeposit(txRef);
+  } catch (err) {
+    console.error('Webhook processing failed:', err.message);
+  }
+  res.status(200).send('OK'); // ack fast regardless - Flutterwave retries on non-2xx
+});
+
+// Lets the app (or support) manually re-check a deposit that's still showing
+// Pending, instead of waiting on the webhook. Safe to call repeatedly -
+// resolveDeposit only ever acts on a transaction still in Pending state, and
+// only for the caller's own transaction.
+router.get('/recheck/:txRef', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT user_id FROM transactions WHERE provider_ref = $1', [req.params.txRef]);
+  if (!rows.length) return res.status(404).json({ error: 'No such transaction' });
+  if (rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Not your transaction' });
+
+  try {
+    const result = await resolveDeposit(req.params.txRef);
+    res.json(result);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
   }
 });
 

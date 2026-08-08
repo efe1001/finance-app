@@ -104,6 +104,8 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ accountNumber, bankCode }),
       }),
+    recheckDeposit: (txRef: string) =>
+      request<{ outcome: string }>(`/flutterwave/recheck/${encodeURIComponent(txRef)}`),
   },
 
   quidax: {

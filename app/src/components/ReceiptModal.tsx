@@ -9,6 +9,8 @@ export type Receipt = {
   status: string;
   rows: ReceiptRow[];
   footerNote?: string;
+  actionLabel?: string;
+  onAction?: () => void;
 };
 
 export default function ReceiptModal({
@@ -62,6 +64,12 @@ export default function ReceiptModal({
 
           {receipt.footerNote && <Text style={styles.footerNote}>{receipt.footerNote}</Text>}
 
+          {receipt.actionLabel && receipt.onAction && (
+            <TouchableOpacity style={styles.checkBtn} onPress={receipt.onAction}>
+              <Text style={styles.checkBtnText}>{receipt.actionLabel}</Text>
+            </TouchableOpacity>
+          )}
+
           <View style={styles.actions}>
             <TouchableOpacity style={styles.shareBtn} onPress={share}>
               <Text style={styles.shareBtnText}>Share Receipt</Text>
@@ -91,6 +99,8 @@ function getStyles(colors: ThemeColors) {
     rowLabel: { color: colors.muted, fontSize: 12, flexShrink: 0 },
     rowValue: { color: colors.ink, fontSize: 12.5, fontWeight: '600', flex: 1, textAlign: 'right' },
     footerNote: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: spacing.md },
+    checkBtn: { alignItems: 'center', paddingVertical: spacing.sm, marginTop: spacing.md, borderWidth: 1, borderColor: colors.signal, borderRadius: radius.md },
+    checkBtnText: { color: colors.signal, fontWeight: '700', fontSize: 12.5 },
     actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
     shareBtn: { flex: 1, backgroundColor: colors.signal, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center' },
     shareBtnText: { color: colors.signalInk, fontWeight: '700', fontSize: 13.5 },
