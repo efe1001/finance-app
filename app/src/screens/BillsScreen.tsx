@@ -18,6 +18,26 @@ type Catalog = Record<string, Record<string, BillItem[]>>;
 // user the right total before they submit.
 const MARKUP_RATE = 0.03;
 
+const PROVIDER_ICON_KEYS: Record<string, string> = {
+  MTN: 'mtn',
+  AIRTEL: 'airtel',
+  GLO: 'glo',
+  '9MOBILE': '9mobile',
+  DSTV: 'dstv',
+  GOTV: 'gotv',
+  STARTIMES: 'startimes',
+  SMILE: 'smile',
+  SPECTRANET: 'spectranet',
+};
+
+function providerIconKey(category: string, provider: string) {
+  const known = PROVIDER_ICON_KEYS[provider.toUpperCase()];
+  if (known) return known;
+  if (category === 'Electricity') return 'electricity';
+  if (category === 'Education') return 'education';
+  return 'bills';
+}
+
 const CATEGORIES = [
   { label: 'Airtime', icon: 'airtime' },
   { label: 'Data', icon: 'data' },
@@ -179,7 +199,8 @@ export default function BillsScreen({ onBack, colors }: { onBack: () => void; co
               <View style={styles.providerGrid}>
                 {providers.map(p => (
                   <TouchableOpacity key={p} style={styles.providerTile} onPress={() => pickProvider(p)}>
-                    <Text style={styles.providerTileText}>{p}</Text>
+                    <IconBadge name={providerIconKey(category, p)} size={40} />
+                    <Text style={styles.providerTileText} numberOfLines={1}>{p}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -278,8 +299,8 @@ function getStyles(colors: ThemeColors) {
     listHead: { color: colors.muted, fontSize: 12, letterSpacing: 0.5, marginBottom: spacing.sm },
     empty: { color: colors.muted, fontSize: 13, textAlign: 'center', marginTop: spacing.xl },
     providerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    providerTile: { width: '31%', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingVertical: spacing.lg, alignItems: 'center' },
-    providerTileText: { color: colors.ink, fontSize: 12.5, fontWeight: '700', textAlign: 'center' },
+    providerTile: { width: '31%', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingVertical: spacing.lg, paddingHorizontal: spacing.xs, alignItems: 'center', gap: spacing.sm },
+    providerTileText: { color: colors.ink, fontSize: 11.5, fontWeight: '700', textAlign: 'center' },
     changeProvider: { color: colors.signal, fontSize: 12.5, fontWeight: '700', marginBottom: spacing.lg },
     bundleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
     bundleName: { flex: 1, color: colors.ink, fontSize: 13, fontWeight: '600', marginRight: spacing.sm },

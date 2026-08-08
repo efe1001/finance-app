@@ -7,7 +7,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useCurrency } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import { useRefresh } from '../data/RefreshContext';
-import { buildTxnReceipt, TxnLike } from '../utils/transactionReceipt';
+import { buildTxnReceipt, txnIconKey, TxnLike } from '../utils/transactionReceipt';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
@@ -185,7 +185,7 @@ export default function HomeScreen({
               style={[styles.activityRow, idx === activity.length - 1 && { borderBottomWidth: 0 }]}
               onPress={() => setActivityReceipt(buildTxnReceipt(item, formatNgn))}>
               <View style={styles.activityLeft}>
-                <View style={styles.activityDot} />
+                <IconBadge name={txnIconKey(item)} size={34} glyphSize={13} />
                 <View style={styles.activityTextWrap}>
                   <Text style={styles.activityTitle} numberOfLines={1} ellipsizeMode="tail">{item.title}</Text>
                   {item.subtitle ? <Text style={styles.activitySub} numberOfLines={1} ellipsizeMode="tail">{item.subtitle}</Text> : null}
@@ -253,7 +253,6 @@ function getStyles(colors: ThemeColors) {
     activityRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.line },
     activityLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginRight: spacing.sm },
     activityTextWrap: { flex: 1 },
-    activityDot: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.surface2 },
     activityTitle: { color: colors.ink, fontSize: 13, fontWeight: '600' },
     activitySub: { color: colors.muted, fontSize: 11, marginTop: 2 },
     activityRight: { flexShrink: 0, alignItems: 'flex-end' },

@@ -55,6 +55,13 @@ function providerNameFor(category, item) {
     const m = item.name.match(/^(SMILE|SPECTRANET)/i);
     return m ? m[0].toUpperCase() : item.biller_code;
   }
+  if (category === 'Electricity') {
+    // Each DISCO lists separate Prepaid/Postpaid items with the meter type
+    // baked into the name ("ABUJA DISCO Postpaid", "BENIN DISCO POSTPAID
+    // TOPUP") - strip that suffix so both group under one readable provider
+    // name instead of a raw code like "BIL204".
+    return item.name.replace(/\s*(electric bills\s*)?(postpaid|prepaid)\s*(topup)?\s*$/i, '').trim() || item.biller_code;
+  }
   return item.biller_code;
 }
 

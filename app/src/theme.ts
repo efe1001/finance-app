@@ -78,4 +78,19 @@ export const badgeColors = {
   solana: '#9945FF',
   ripple: '#346AA9',
   dogecoin: '#C2A633',
+  // Bill provider brands - distinct colors so the picker reads at a glance
+  // instead of a wall of identical text chips.
+  mtn: '#FFC700',
+  airtel: '#ED1C24',
+  glo: '#00A651',
+  '9mobile': '#00A99D',
+  dstv: '#004990',
+  gotv: '#E4002B',
+  startimes: '#1B75BC',
+  smile: '#F5A623',
+  spectranet: '#7B2D8E',
 };
+
+// Icon keys whose background is light enough that white glyph text loses
+// contrast - these render in dark ink instead.
+export const darkGlyphIcons = new Set(['mtn', 'smile']);

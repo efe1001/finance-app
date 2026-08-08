@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useCurrency } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import { useRefresh } from '../data/RefreshContext';
-import { buildTxnReceipt } from '../utils/transactionReceipt';
+import { buildTxnReceipt, txnIconKey } from '../utils/transactionReceipt';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
@@ -241,9 +241,12 @@ export default function WalletScreen({
                 ) : (
                   filteredHistory.map(t => (
                     <TouchableOpacity key={t.id} style={styles.holdingRow} onPress={() => openReceipt(t)}>
-                      <View style={styles.holdingTextWrap}>
-                        <Text style={styles.holdingSymbol} numberOfLines={1} ellipsizeMode="tail">{t.title}</Text>
-                        {t.subtitle ? <Text style={styles.holdingChange} numberOfLines={1} ellipsizeMode="tail">{t.subtitle}</Text> : null}
+                      <View style={styles.holdingLeft}>
+                        <IconBadge name={txnIconKey(t)} size={36} glyphSize={13} />
+                        <View style={styles.holdingTextWrap}>
+                          <Text style={styles.holdingSymbol} numberOfLines={1} ellipsizeMode="tail">{t.title}</Text>
+                          {t.subtitle ? <Text style={styles.holdingChange} numberOfLines={1} ellipsizeMode="tail">{t.subtitle}</Text> : null}
+                        </View>
                       </View>
                       <View style={styles.holdingRight}>
                         <Text style={styles.holdingValue} numberOfLines={1}>{formatNgn(Math.abs(t.amount_ngn))}</Text>

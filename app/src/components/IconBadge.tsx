@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { badgeColors } from '../theme';
+import { badgeColors, darkGlyphIcons } from '../theme';
 
 const GLYPHS: Record<string, string> = {
   fund: '+',
@@ -47,6 +47,15 @@ const GLYPHS: Record<string, string> = {
   solana: '◎',
   ripple: 'X',
   dogecoin: 'Ð',
+  mtn: 'MTN',
+  airtel: 'AIR',
+  glo: 'GLO',
+  '9mobile': '9M',
+  dstv: 'DSTV',
+  gotv: 'GOTV',
+  startimes: 'STAR',
+  smile: 'SML',
+  spectranet: 'SPEC',
 };
 
 export default function IconBadge({
@@ -60,18 +69,28 @@ export default function IconBadge({
 }) {
   const bg = (badgeColors as Record<string, string>)[name] ?? '#6B7280';
   const glyph = GLYPHS[name] ?? '●';
+  const dark = darkGlyphIcons.has(name);
+  // Longer brand abbreviations (DSTV, GOTV, STAR...) need a smaller font to
+  // fit the same circle a single glyph character sits comfortably in.
+  const baseSize = glyphSize ?? size * 0.42;
+  const fontSize = glyph.length > 2 ? baseSize * (2.4 / glyph.length) : baseSize;
   return (
     <View
       style={[
         styles.circle,
         { width: size, height: size, borderRadius: size / 2, backgroundColor: bg },
       ]}>
-      <Text style={[styles.glyph, { fontSize: glyphSize ?? size * 0.42 }]}>{glyph}</Text>
+      <Text
+        style={[styles.glyph, { fontSize, color: dark ? '#17110A' : '#FFFFFF' }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit>
+        {glyph}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   circle: { alignItems: 'center', justifyContent: 'center' },
-  glyph: { color: '#FFFFFF', fontWeight: '700' },
+  glyph: { fontWeight: '700' },
 });
