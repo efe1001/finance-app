@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Clipboard, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Clipboard, Alert } from 'react-native';
 import { pick, isErrorWithCode, errorCodes, types as pickerTypes, DocumentPickerResponse } from '@react-native-documents/picker';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
@@ -9,6 +9,7 @@ import type { ScreenKey } from '../components/Drawer';
 import ScreenHeader from '../components/ScreenHeader';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
+import BrandedLoader from '../components/BrandedLoader';
 import { useRefresh } from '../data/RefreshContext';
 
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
@@ -255,7 +256,7 @@ export default function TradeScreen({
       <View style={styles.screen}>
         <ScreenHeader title="Trade" onBack={onBack} colors={colors} />
         <View style={styles.centerFill}>
-          <ActivityIndicator size="large" color={colors.signal} />
+          <BrandedLoader />
         </View>
       </View>
     );

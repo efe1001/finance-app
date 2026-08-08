@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -8,6 +8,7 @@ import { useRefresh } from '../data/RefreshContext';
 import ScreenHeader from '../components/ScreenHeader';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
+import BrandedLoader from '../components/BrandedLoader';
 
 type BillItem = { itemCode: string; billerCode: string; name: string; provider: string; amount: number; fee: number; labelName: string };
 type Catalog = Record<string, Record<string, BillItem[]>>;
@@ -166,7 +167,7 @@ export default function BillsScreen({ onBack, colors }: { onBack: () => void; co
         </View>
 
         {loading && !loadError ? (
-          <ActivityIndicator size="large" color={colors.signal} style={{ marginTop: spacing.xl }} />
+          <View style={{ marginTop: spacing.xl }}><BrandedLoader /></View>
         ) : COMING_SOON.has(category) ? (
           <Text style={styles.empty}>{category} isn't available yet — check back soon.</Text>
         ) : !provider ? (

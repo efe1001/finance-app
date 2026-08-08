@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Animated, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Animated } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -11,6 +11,7 @@ import { buildTxnReceipt, TxnLike } from '../utils/transactionReceipt';
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
+import BrandedLoader from '../components/BrandedLoader';
 
 type TickerItem = { symbol: string; id: string; usd: number; changePct: number };
 type Transaction = TxnLike;
@@ -86,7 +87,7 @@ export default function HomeScreen({
     return (
       <View style={styles.screen}>
         <View style={styles.centerFill}>
-          <ActivityIndicator size="large" color={colors.signal} />
+          <BrandedLoader />
         </View>
       </View>
     );
