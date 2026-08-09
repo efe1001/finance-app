@@ -303,7 +303,7 @@ export default function WalletScreen({
 function getStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+    content: { padding: spacing.lg, paddingBottom: spacing.xxl * 4 },
     topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg },
     iconBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
     iconBtnGlyph: { color: colors.ink, fontSize: 16 },

@@ -89,6 +89,12 @@ const LINE_ICONS: Record<string, (color: string) => React.ReactNode> = {
       <Path d="M12 10.5v2l1.4 1.4" stroke={c} strokeWidth={STROKE} strokeLinecap="round" fill="none" />
     </>
   ),
+  wallet: (c) => (
+    <>
+      <Rect x={3} y={7} width={18} height={13} rx={2} stroke={c} strokeWidth={STROKE} fill="none" />
+      <Path d="M3 10h18M15 14h3" stroke={c} strokeWidth={STROKE} strokeLinecap="round" fill="none" />
+    </>
+  ),
   bills: (c) => (
     <>
       <Rect x={5} y={3} width={14} height={18} rx={2} stroke={c} strokeWidth={STROKE} fill="none" />

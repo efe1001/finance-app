@@ -310,7 +310,7 @@ function statusPillStyle(status: string, colors: ThemeColors) {
 function getStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+    content: { padding: spacing.lg, paddingBottom: spacing.xxl * 4 },
     sellBtn: { backgroundColor: colors.signal, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
     sellBtnText: { color: colors.signalInk, fontWeight: '700', fontSize: 12 },
     empty: { color: colors.muted, fontSize: 13, textAlign: 'center', marginTop: spacing.xxl },

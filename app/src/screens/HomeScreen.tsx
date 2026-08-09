@@ -214,7 +214,7 @@ function getStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
     centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+    content: { padding: spacing.lg, paddingBottom: spacing.xxl * 4 },
     errorBanner: { backgroundColor: 'rgba(226,96,77,0.1)', borderWidth: 1, borderColor: colors.ember, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
     errorBannerText: { color: colors.ember, fontSize: 11.5, lineHeight: 16 },
     ninBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(226,163,58,0.1)', borderWidth: 1, borderColor: colors.signal, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
