@@ -55,6 +55,37 @@ router.post('/broadcast', async (req, res) => {
 
 router.use(requireAuth, requireAdmin);
 
+// Zeroes every user's NGN wallet balance and crypto holdings back to 0, and
+// cancels anything still sitting Pending so it can't later re-credit a
+// balance after the reset (an old pending deposit approved post-reset would
+// silently undo it). Accounts and transaction history are kept - only the
+// money figures are cleared. Meant for wiping test data before handing the
+// app to a client, not for routine use, hence the deliberate confirm phrase.
+router.post('/reset-balances', async (req, res) => {
+  const { confirm } = req.body;
+  if (confirm !== 'RESET') {
+    return res.status(400).json({ error: 'Send { "confirm": "RESET" } to proceed - this cannot be undone.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('UPDATE users SET wallet_balance_ngn = 0');
+    await client.query('DELETE FROM holdings');
+    await client.query(
+      "UPDATE transactions SET status = 'Rejected', admin_note = 'Cleared by account reset' WHERE status = 'Pending'",
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  res.json({ ok: true, message: 'All wallet balances and crypto holdings have been reset to zero.' });
+});
+
 // --- Transaction approvals ---
 
 router.get('/transactions', async (req, res) => {
@@ -197,19 +228,30 @@ router.post('/users/:id/nin/reject', async (req, res) => {
 // --- Analytics ---
 
 router.get('/stats', async (req, res) => {
-  const [{ rows: userStats }, { rows: txnStats }, { rows: pendingCount }] = await Promise.all([
+  const [{ rows: userStats }, { rows: txnStats }, { rows: pendingCount }, { rows: revenueStats }] = await Promise.all([
     pool.query('SELECT COUNT(*)::int AS total_users, COALESCE(SUM(wallet_balance_ngn), 0) AS total_balance_ngn FROM users'),
     pool.query(
       `SELECT type, status, COUNT(*)::int AS count, COALESCE(SUM(amount_ngn), 0) AS total_ngn
        FROM transactions GROUP BY type, status ORDER BY type, status`,
     ),
     pool.query("SELECT COUNT(*)::int AS count FROM transactions WHERE status = 'Pending'"),
+    // Only counts fee_ngn on Successful rows - a Rejected/refunded bill never
+    // actually earned its markup, so it must not count here even though the
+    // fee_ngn value is still sitting on that row.
+    pool.query("SELECT COALESCE(SUM(fee_ngn), 0) AS total_revenue_ngn FROM transactions WHERE status = 'Successful'"),
   ]);
 
   res.json({
     totalUsers: userStats[0].total_users,
+    // What the business owes back to users - never withdraw against this
+    // number, it's a liability, not available cash.
     totalBalanceNgn: Number(userStats[0].total_balance_ngn),
     pendingApprovals: pendingCount[0].count,
+    // What the business has actually earned (bills markup + swap spread) and
+    // can safely withdraw. Doesn't include gift card or crypto trade margin -
+    // those depend on what a card resells for or what an admin actually
+    // pays/charges by hand, which the app has no visibility into.
+    totalRevenueNgn: Number(revenueStats[0].total_revenue_ngn),
     breakdown: txnStats.map(r => ({ ...r, total_ngn: Number(r.total_ngn) })),
   });
 });

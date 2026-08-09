@@ -34,7 +34,7 @@ type AdminUser = {
   is_admin: boolean;
 };
 
-type Overview = { totalUsers: number; totalBalanceNgn: number; pendingApprovals: number };
+type Overview = { totalUsers: number; totalBalanceNgn: number; pendingApprovals: number; totalRevenueNgn: number };
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'approvals', label: 'Approvals', icon: 'approvals' },
@@ -62,7 +62,7 @@ export default function AdminDashboardScreen() {
 
   useEffect(() => {
     api.admin.stats().then(s =>
-      setOverview({ totalUsers: s.totalUsers, totalBalanceNgn: s.totalBalanceNgn, pendingApprovals: s.pendingApprovals }),
+      setOverview({ totalUsers: s.totalUsers, totalBalanceNgn: s.totalBalanceNgn, pendingApprovals: s.pendingApprovals, totalRevenueNgn: s.totalRevenueNgn }),
     ).catch(() => {});
   }, [refreshTick]);
 
@@ -99,9 +99,19 @@ export default function AdminDashboardScreen() {
           <Text style={styles.overviewValue} numberOfLines={1}>
             {overview ? `₦${overview.totalBalanceNgn.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
           </Text>
-          <Text style={styles.overviewLabel}>TOTAL BALANCE</Text>
+          <Text style={styles.overviewLabel}>OWED TO USERS</Text>
+        </View>
+        <View style={[styles.overviewCard, { flex: 1.4, borderColor: colors.jade }]}>
+          <Text style={[styles.overviewValue, { color: colors.jade }]} numberOfLines={1}>
+            {overview ? `₦${overview.totalRevenueNgn.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
+          </Text>
+          <Text style={styles.overviewLabel}>YOUR REVENUE</Text>
         </View>
       </View>
+      <Text style={styles.revenueNote}>
+        "Owed to users" is what's in everyone's wallets - not yours to withdraw. "Your Revenue" (bills markup + swap
+        spread) is the only figure here that's safely yours.
+      </Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs} contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.lg }}>
         {TABS.map(t => (
@@ -767,6 +777,8 @@ function LimitsTab({ colors }: { colors: ThemeColors }) {
   const styles = getStyles(colors);
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     api.admin.getSettings().then(setSettings);
@@ -781,6 +793,30 @@ function LimitsTab({ colors }: { colors: ThemeColors }) {
       Alert.alert('Error', e.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  function confirmReset() {
+    Alert.alert(
+      'Reset all balances?',
+      "Every user's wallet balance and crypto holdings will be set to 0, and anything pending will be cancelled. Accounts and transaction history stay. This cannot be undone.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reset Everything', style: 'destructive', onPress: doReset },
+      ],
+    );
+  }
+
+  async function doReset() {
+    setResetting(true);
+    try {
+      const res = await api.admin.resetBalances();
+      Alert.alert('Done', res.message);
+      setResetConfirmText('');
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -823,6 +859,33 @@ function LimitsTab({ colors }: { colors: ThemeColors }) {
       <TouchableOpacity style={styles.cta} onPress={save} disabled={saving}>
         <Text style={styles.ctaText}>{saving ? 'Saving…' : 'Save Limits'}</Text>
       </TouchableOpacity>
+
+      <View style={[styles.card, { borderColor: colors.ember, marginTop: spacing.xl }]}>
+        <View style={styles.fieldHeadRow}>
+          <IconBadge name="withdrawal" size={32} />
+          <Text style={[styles.sectionHead, { color: colors.ember }]}>DANGER ZONE</Text>
+        </View>
+        <Text style={styles.dangerText}>
+          Resets every user's wallet balance and crypto holdings to 0, and cancels anything still pending. Accounts
+          and transaction history are kept. For wiping test data before handing the app to a client - not for
+          routine use, and it can't be undone.
+        </Text>
+        <Text style={styles.flabel}>TYPE "RESET" TO ENABLE</Text>
+        <TextInput
+          style={styles.input}
+          value={resetConfirmText}
+          onChangeText={setResetConfirmText}
+          autoCapitalize="characters"
+          placeholder="RESET"
+          placeholderTextColor={colors.muted}
+        />
+        <TouchableOpacity
+          style={[styles.dangerCta, (resetConfirmText !== 'RESET' || resetting) && { opacity: 0.4 }]}
+          onPress={confirmReset}
+          disabled={resetConfirmText !== 'RESET' || resetting}>
+          <Text style={styles.ctaText}>{resetting ? 'Resetting…' : 'Reset All Balances'}</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
@@ -838,7 +901,8 @@ function getStyles(colors: ThemeColors) {
     iconBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
     iconBtnGlyph: { color: colors.ink, fontSize: 16 },
 
-    overviewRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+    overviewRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
+    revenueNote: { color: colors.muted, fontSize: 10.5, lineHeight: 15, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
     overviewCard: { flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.sm, alignItems: 'center' },
     overviewValue: { color: colors.ink, fontSize: 17, fontWeight: '700' },
     overviewLabel: { color: colors.muted, fontSize: 9, letterSpacing: 0.6, marginTop: 3 },
@@ -917,6 +981,8 @@ function getStyles(colors: ThemeColors) {
     flabel: { color: colors.muted, fontSize: 10, letterSpacing: 0.5 },
     cta: { backgroundColor: colors.signal, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center', marginTop: spacing.md },
     ctaText: { color: colors.signalInk, fontWeight: '700', fontSize: 14 },
+    dangerText: { color: colors.muted, fontSize: 11.5, lineHeight: 17, marginBottom: spacing.md },
+    dangerCta: { backgroundColor: colors.ember, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center', marginTop: spacing.md },
 
     calcBrandChip: { paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
     calcBrandChipOn: { backgroundColor: colors.signal, borderColor: 'transparent' },

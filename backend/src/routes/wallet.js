@@ -84,6 +84,9 @@ const SWAP_ASSET_IDS = {
 // Kept as revenue on every swap, same reasoning as the bills service fee -
 // taken out of the destination amount, never out of what leaves holdings.
 const SWAP_SPREAD = 0.01;
+// Only used to express the swap spread in NGN terms for the revenue figure -
+// the swap itself never touches wallet_balance_ngn.
+const NGN_PER_USD = 1631;
 
 // Crypto-to-crypto swap is purely an internal ledger move (holdings table
 // only) using a live CoinGecko rate - unlike buy/sell, there's no external
@@ -142,10 +145,12 @@ router.post('/swap', requireAuth, async (req, res) => {
     );
     // amount_ngn stays 0 - a swap moves value between two holdings, it never
     // touches wallet_balance_ngn or counts as NGN spent/received in Reports.
+    // fee_ngn is the 1% spread expressed in NGN, purely for the revenue figure.
+    const feeNgn = fromQty * fromPrice * SWAP_SPREAD * NGN_PER_USD;
     await client.query(
-      `INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, asset, qty)
-       VALUES ($1, 'swap', $2, $3, 0, 'Successful', $4, $5)`,
-      [req.user.id, `Swap ${fromAsset} → ${toAsset}`, `${fromQty} ${fromAsset} → ${toQty.toFixed(8)} ${toAsset}`, fromAsset, fromQty],
+      `INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, asset, qty, fee_ngn)
+       VALUES ($1, 'swap', $2, $3, 0, 'Successful', $4, $5, $6)`,
+      [req.user.id, `Swap ${fromAsset} → ${toAsset}`, `${fromQty} ${fromAsset} → ${toQty.toFixed(8)} ${toAsset}`, fromAsset, fromQty, feeNgn],
     );
     await client.query('COMMIT');
   } catch (err) {

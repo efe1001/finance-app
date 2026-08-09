@@ -209,6 +209,8 @@ export const api = {
         body: JSON.stringify({ amountNgn, note }),
       }),
     stats: () => request<any>('/admin/stats'),
+    resetBalances: () =>
+      request<{ ok: true; message: string }>('/admin/reset-balances', { method: 'POST', body: JSON.stringify({ confirm: 'RESET' }) }),
     getSettings: () => request<Record<string, string>>('/admin/settings'),
     updateSettings: (settings: Record<string, string | number>) =>
       request<{ ok: true }>('/admin/settings', { method: 'PUT', body: JSON.stringify(settings) }),

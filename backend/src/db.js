@@ -178,6 +178,15 @@ async function init() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_mime TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_updated_at TIMESTAMP;
 
+    -- Business revenue (bills markup, swap spread) captured at the moment each
+    -- transaction happens, kept separate from amount_ngn so it can be summed
+    -- without re-deriving it from title/subtitle text. Only populated for
+    -- transaction types where the fee is a clean, known formula - not gift
+    -- cards or crypto trades, where any margin isn't something the app can
+    -- see (it depends on what the card resells for, or what the admin
+    -- actually pays/charges when fulfilling a trade by hand).
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS fee_ngn NUMERIC NOT NULL DEFAULT 0;
+
     UPDATE users SET referral_code = 'FA' || LPAD(id::text, 6, '0') WHERE referral_code IS NULL;
   `);
 }

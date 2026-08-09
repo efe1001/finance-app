@@ -170,9 +170,9 @@ router.post('/pay', requireAuth, async (req, res) => {
 
     await client.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn - $1 WHERE id = $2', [totalNgn, req.user.id]);
     const { rows: txnRows } = await client.query(
-      `INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, address)
-       VALUES ($1, 'bill', $2, $3, $4, 'Pending', $5) RETURNING id`,
-      [req.user.id, item.name, customerNumber, -totalNgn, customerNumber],
+      `INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, address, fee_ngn)
+       VALUES ($1, 'bill', $2, $3, $4, 'Pending', $5, $6) RETURNING id`,
+      [req.user.id, item.name, customerNumber, -totalNgn, customerNumber, markup],
     );
     txnId = txnRows[0].id;
     await client.query('COMMIT');
