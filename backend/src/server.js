@@ -12,6 +12,7 @@ const giftcardsRoutes = require('./routes/giftcards');
 const adminRoutes = require('./routes/admin');
 const { router: flutterwaveRoutes } = require('./routes/flutterwave');
 const quidaxRoutes = require('./routes/quidax');
+const announcementsRoutes = require('./routes/announcements');
 
 const app = express();
 app.use(cors());
@@ -42,6 +43,7 @@ app.use('/api/giftcards', giftcardsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/flutterwave', flutterwaveRoutes);
 app.use('/api/quidax', quidaxRoutes);
+app.use('/api/announcements', announcementsRoutes);
 
 const PORT = process.env.PORT || 4000;
 

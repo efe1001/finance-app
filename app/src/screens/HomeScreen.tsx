@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Animated } from 'react-native';
+import Svg from 'react-native-svg';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -8,8 +9,9 @@ import { useCurrency } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import { useRefresh } from '../data/RefreshContext';
 import { buildTxnReceipt, txnIconKey, txnAmountLabel, TxnLike } from '../utils/transactionReceipt';
+import { getDismissedAnnouncementId, setDismissedAnnouncementId } from '../utils/announcementDismiss';
 import type { ScreenKey } from '../components/Drawer';
-import IconBadge from '../components/IconBadge';
+import IconBadge, { LINE_ICONS } from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
 import BrandedLoader from '../components/BrandedLoader';
 import EyeToggle from '../components/EyeToggle';
@@ -52,7 +54,27 @@ export default function HomeScreen({
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [activityReceipt, setActivityReceipt] = useState<Receipt | null>(null);
+  const [announcement, setAnnouncement] = useState<{ id: number; title: string; body: string } | null>(null);
   const fade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const latest = await api.announcements.latest();
+        if (!latest) return;
+        const dismissedId = await getDismissedAnnouncementId();
+        if (latest.id !== dismissedId) setAnnouncement(latest);
+      } catch {
+        // non-critical - the push notification already reached them either way
+      }
+    })();
+  }, [version]);
+
+  async function dismissAnnouncement() {
+    if (!announcement) return;
+    await setDismissedAnnouncementId(announcement.id);
+    setAnnouncement(null);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,6 +124,20 @@ export default function HomeScreen({
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
+        {announcement && (
+          <View style={styles.announceBanner}>
+            <View style={styles.announceIconWrap}>
+              <Svg width={16} height={16} viewBox="0 0 24 24">{LINE_ICONS.alerts('#FFFFFF')}</Svg>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.announceTitle}>{announcement.title}</Text>
+              <Text style={styles.announceBody} numberOfLines={4}>{announcement.body}</Text>
+            </View>
+            <TouchableOpacity onPress={dismissAnnouncement} hitSlop={10}>
+              <Text style={styles.announceClose}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {loadError && (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>Couldn't load the latest data. Pull down to try again.</Text>
@@ -214,6 +250,11 @@ function getStyles(colors: ThemeColors) {
     screen: { flex: 1, backgroundColor: colors.bg },
     centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     content: { padding: spacing.lg, paddingBottom: spacing.xxl * 4 },
+    announceBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, backgroundColor: colors.signal, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+    announceIconWrap: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    announceTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+    announceBody: { color: 'rgba(255,255,255,0.85)', fontSize: 11.5, marginTop: 2, lineHeight: 16 },
+    announceClose: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '700', padding: 2 },
     errorBanner: { backgroundColor: 'rgba(226,96,77,0.1)', borderWidth: 1, borderColor: colors.ember, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
     errorBannerText: { color: colors.ember, fontSize: 11.5, lineHeight: 16 },
     ninBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(226,163,58,0.1)', borderWidth: 1, borderColor: colors.signal, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },

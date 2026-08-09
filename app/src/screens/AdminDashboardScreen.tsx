@@ -7,7 +7,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { NGN_PER_USD } from '../currency/CurrencyContext';
 import IconBadge from '../components/IconBadge';
 
-type Tab = 'approvals' | 'users' | 'nin' | 'stats' | 'wallets' | 'rates' | 'settings';
+type Tab = 'approvals' | 'users' | 'nin' | 'stats' | 'wallets' | 'rates' | 'announce' | 'settings';
 
 type PendingTxn = {
   id: number;
@@ -47,6 +47,7 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'stats', label: 'Analytics', icon: 'stats' },
   { key: 'wallets', label: 'Wallets', icon: 'vault' },
   { key: 'rates', label: 'Gift Cards', icon: 'giftcard' },
+  { key: 'announce', label: 'Announce', icon: 'alerts' },
   { key: 'settings', label: 'Limits', icon: 'limits' },
 ];
 
@@ -137,6 +138,7 @@ export default function AdminDashboardScreen() {
       {tab === 'stats' && <StatsTab colors={colors} />}
       {tab === 'wallets' && <WalletsTab colors={colors} />}
       {tab === 'rates' && <RatesTab colors={colors} />}
+      {tab === 'announce' && <AnnounceTab colors={colors} />}
       {tab === 'settings' && <LimitsTab colors={colors} />}
     </View>
   );
@@ -960,6 +962,94 @@ function RatesTab({ colors }: { colors: ThemeColors }) {
 
 function tierRangeLabel(t: Tier) {
   return t.maxUsd == null ? `$${t.minUsd}+` : `$${t.minUsd}–${t.maxUsd}`;
+}
+
+type Announcement = { id: number; title: string; body: string; created_at: string; admin_name: string | null };
+
+// Sends both halves at once: a persistent record shown as a dismissible
+// banner on Home (so anyone who missed the push still sees it next time
+// they open the app) and an immediate push to every device with a saved
+// token - same underlying list every past announcement stays visible in,
+// for reference below the form.
+function AnnounceTab({ colors }: { colors: ThemeColors }) {
+  const styles = getStyles(colors);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const [history, setHistory] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api.admin.announcements().then(setHistory).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const canSend = title.trim().length > 0 && body.trim().length > 0;
+
+  async function send() {
+    if (!canSend) return;
+    setSending(true);
+    try {
+      const res = await api.admin.sendAnnouncement({ title: title.trim(), body: body.trim() });
+      Alert.alert('Sent', `Pushed to ${res.recipients} device${res.recipients === 1 ? '' : 's'}, and it'll show on Home for everyone until they dismiss it.`);
+      setTitle('');
+      setBody('');
+      load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
+      <View style={styles.card}>
+        <View style={styles.fieldHeadRow}>
+          <IconBadge name="alerts" size={32} />
+          <Text style={styles.sectionHead}>SEND ANNOUNCEMENT</Text>
+        </View>
+        <Text style={styles.dangerText}>
+          Shows as a dismissible banner at the top of everyone's Home screen, and pushes immediately to every device
+          with notifications enabled.
+        </Text>
+        <Text style={styles.flabel}>TITLE</Text>
+        <TextInput style={[styles.input, { marginBottom: spacing.sm }]} value={title} onChangeText={setTitle} placeholder="e.g. Scheduled maintenance tonight" placeholderTextColor={colors.muted} maxLength={80} />
+        <Text style={styles.flabel}>MESSAGE</Text>
+        <TextInput
+          style={[styles.input, { marginBottom: spacing.sm, minHeight: 70, textAlignVertical: 'top' }]}
+          value={body}
+          onChangeText={setBody}
+          placeholder="What do you want users to know?"
+          placeholderTextColor={colors.muted}
+          multiline
+          maxLength={300}
+        />
+        <TouchableOpacity style={[styles.cta, (!canSend || sending) && { opacity: 0.5 }]} onPress={send} disabled={!canSend || sending}>
+          <Text style={styles.ctaText}>{sending ? 'Sending…' : 'Send to Everyone'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={[styles.sectionHead, { marginTop: spacing.lg, marginBottom: spacing.sm }]}>RECENT ANNOUNCEMENTS</Text>
+      {history.length === 0 ? (
+        <Text style={styles.dangerText}>Nothing sent yet.</Text>
+      ) : (
+        history.map(a => (
+          <View key={a.id} style={styles.row}>
+            <View style={{ flex: 1, marginRight: spacing.sm }}>
+              <Text style={styles.rowLabel}>{a.title}</Text>
+              <Text style={{ color: colors.muted, fontSize: 11, marginTop: 2 }} numberOfLines={2}>{a.body}</Text>
+            </View>
+            <Text style={{ color: colors.muted, fontSize: 10 }}>{new Date(a.created_at).toLocaleDateString()}</Text>
+          </View>
+        ))
+      )}
+    </ScrollView>
+  );
 }
 
 function LimitsTab({ colors }: { colors: ThemeColors }) {

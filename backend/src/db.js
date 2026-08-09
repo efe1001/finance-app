@@ -195,6 +195,17 @@ async function init() {
     -- silent reduction.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS invested_balance_ngn NUMERIC NOT NULL DEFAULT 0;
 
+    -- Admin-authored announcements - shown as a dismissible banner on Home
+    -- (persistent, so a user who missed the push still sees it next time
+    -- they open the app) and also pushed immediately via FCM.
+    CREATE TABLE IF NOT EXISTS announcements (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      admin_id INTEGER REFERENCES users(id),
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
     UPDATE users SET referral_code = 'FA' || LPAD(id::text, 6, '0') WHERE referral_code IS NULL;
   `);
 }

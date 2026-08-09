@@ -66,6 +66,10 @@ export const api = {
   submitNin: (nin: string) => request<any>('/auth/nin', { method: 'POST', body: JSON.stringify({ nin }) }),
   saveFcmToken: (token: string | null) => request<{ ok: true }>('/auth/fcm-token', { method: 'POST', body: JSON.stringify({ token }) }),
 
+  announcements: {
+    latest: () => request<{ id: number; title: string; body: string; created_at: string } | null>('/announcements/latest'),
+  },
+
   transactions: (opts?: { limit?: number; offset?: number }) =>
     request<any[]>(`/wallet/transactions?limit=${opts?.limit ?? 20}&offset=${opts?.offset ?? 0}`),
   addTransaction: (body: {
@@ -217,6 +221,13 @@ export const api = {
       request<{ id: number; message: string }>('/admin/withdraw-revenue', { method: 'POST', body: JSON.stringify(body) }),
     revenueWithdrawals: () =>
       request<{ id: number; detail: string; amountNgn: number; createdAt: string }[]>('/admin/revenue-withdrawals'),
+    sendAnnouncement: (body: { title: string; body: string }) =>
+      request<{ id: number; title: string; body: string; created_at: string; recipients: number }>('/announcements', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    announcements: () =>
+      request<{ id: number; title: string; body: string; created_at: string; admin_name: string | null }[]>('/announcements'),
     getSettings: () => request<Record<string, string>>('/admin/settings'),
     updateSettings: (settings: Record<string, string | number>) =>
       request<{ ok: true }>('/admin/settings', { method: 'PUT', body: JSON.stringify(settings) }),
