@@ -6,9 +6,10 @@ import { useAuth } from '../auth/AuthContext';
 import { useCurrency } from '../currency/CurrencyContext';
 import { useBalanceVisibility } from '../wallet/BalanceVisibilityContext';
 import { useRefresh } from '../data/RefreshContext';
+import Svg from 'react-native-svg';
 import { buildTxnReceipt, txnIconKey, txnAmountLabel } from '../utils/transactionReceipt';
 import type { ScreenKey } from '../components/Drawer';
-import IconBadge from '../components/IconBadge';
+import IconBadge, { LINE_ICONS } from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
 
 type Holding = { symbol: string; icon: string; usd: number; changePct: number; qty: number };
@@ -189,23 +190,10 @@ export default function WalletScreen({
     <View style={styles.screen}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.signal} />}>
-        <View style={styles.topBar}>
-          <TouchableOpacity onPress={onOpenDrawer} style={styles.iconBtn}>
-            <Text style={styles.iconBtnGlyph}>≡</Text>
-          </TouchableOpacity>
-          <Text style={styles.topBarTitle}>Wallet</Text>
-          <View style={styles.iconBtn} />
-        </View>
-        {loadError && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorBannerText}>Couldn't load the latest data. Pull down to try again.</Text>
-          </View>
-        )}
-        <View style={styles.balanceHead}>
-          <Text style={styles.balanceLabel}>WALLET BALANCE</Text>
-          <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+        <View style={styles.band}>
+          <View style={styles.bandTop}>
             <View style={styles.currencySeg}>
               <TouchableOpacity style={[styles.currencyChip, currency === 'USD' && styles.currencyChipOn]} onPress={() => setCurrency('USD')}>
                 <Text style={[styles.currencyChipText, currency === 'USD' && styles.currencyChipTextOn]}>USD</Text>
@@ -214,22 +202,37 @@ export default function WalletScreen({
                 <Text style={[styles.currencyChipText, currency === 'NGN' && styles.currencyChipTextOn]}>NGN</Text>
               </TouchableOpacity>
             </View>
+            <TouchableOpacity onPress={onOpenDrawer} style={styles.menuBtn}>
+              <Text style={styles.menuBtnGlyph}>≡</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.balanceLabel}>WALLET BALANCE</Text>
+          <View style={styles.balRow}>
+            <Text style={styles.balanceAmount}>{balanceText}</Text>
             <TouchableOpacity onPress={toggleBalanceHidden} style={styles.eyeBtn} hitSlop={10}>
               <Text style={styles.eyeGlyph}>{balanceHidden ? '🙈' : '👁'}</Text>
             </TouchableOpacity>
           </View>
-        </View>
-        <Text style={styles.balanceAmount}>{balanceText}</Text>
 
-        <Animated.View style={{ opacity: fade }}>
-          <View style={styles.actionsRow}>
+          <Animated.View style={[styles.actionsRow, { opacity: fade }]}>
             {ACTIONS.map(a => (
               <TouchableOpacity key={a.key} style={styles.actionItem} onPress={() => onNavigate(a.key)}>
-                <IconBadge name={a.icon} size={46} />
+                <View style={styles.actionIconCircle}>
+                  <Svg width={18} height={18} viewBox="0 0 24 24">{LINE_ICONS[a.icon]?.('#FFFFFF')}</Svg>
+                </View>
                 <Text style={styles.actionLabel}>{a.label}</Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </Animated.View>
+        </View>
+
+        <View style={styles.sheet}>
+          {loadError && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>Couldn't load the latest data. Pull down to try again.</Text>
+            </View>
+          )}
 
           <View style={styles.tabs}>
             <TouchableOpacity style={[styles.tabBtn, tab === 'holdings' && styles.tabBtnOn]} onPress={() => setTab('holdings')}>
@@ -254,7 +257,7 @@ export default function WalletScreen({
                   </View>
                   <View style={styles.holdingRight}>
                     <Text style={styles.holdingValue} numberOfLines={1}>{format(h.qty * h.usd)}</Text>
-                    <Text style={styles.holdingPrice} numberOfLines={1}>{h.qty.toFixed(6)} {h.symbol}</Text>
+                    <Text style={styles.holdingPrice} numberOfLines={1}>{format(h.usd, { maximumFractionDigits: h.usd > 100 ? 0 : 2 })}</Text>
                   </View>
                 </View>
               ))
@@ -293,7 +296,7 @@ export default function WalletScreen({
                 )}
               </>
             )}
-        </Animated.View>
+        </View>
       </ScrollView>
       <ReceiptModal receipt={txnReceipt} onClose={() => setTxnReceipt(null)} colors={colors} />
     </View>
@@ -303,30 +306,36 @@ export default function WalletScreen({
 function getStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    content: { padding: spacing.lg, paddingBottom: spacing.xxl * 4 },
-    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg },
-    iconBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-    iconBtnGlyph: { color: colors.ink, fontSize: 16 },
-    topBarTitle: { color: colors.ink, fontSize: 16, fontWeight: '700' },
+    scrollContent: { paddingBottom: spacing.xxl * 4 },
+    // Solid violet band (no gradient, matching the rest of the theme) - the
+    // sheet below overlaps it with a negative top margin so the rounded
+    // corners read as one continuous seam, like the reference screenshot.
+    band: { backgroundColor: colors.signal, paddingTop: spacing.xl, paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
+    bandTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    menuBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+    menuBtnGlyph: { color: '#FFFFFF', fontSize: 16 },
     errorBanner: { backgroundColor: 'rgba(226,96,77,0.1)', borderWidth: 1, borderColor: colors.ember, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
     errorBannerText: { color: colors.ember, fontSize: 11.5, lineHeight: 16 },
     filterChip: { paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
     filterChipOn: { backgroundColor: colors.signal, borderColor: 'transparent' },
     filterChipText: { color: colors.muted, fontSize: 11.5, fontWeight: '700' },
     filterChipTextOn: { color: colors.signalInk },
-    balanceHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    balanceLabel: { color: colors.muted, fontSize: 11, letterSpacing: 1 },
+    balanceLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 11, letterSpacing: 1, fontWeight: '700', marginTop: spacing.lg },
+    balRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     eyeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
     eyeGlyph: { fontSize: 18 },
-    currencySeg: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: radius.pill, padding: 3, gap: 2 },
+    currencySeg: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: radius.pill, padding: 3, gap: 2 },
     currencyChip: { paddingVertical: 4, paddingHorizontal: spacing.md, borderRadius: radius.pill },
-    currencyChipOn: { backgroundColor: colors.signal },
-    currencyChipText: { color: colors.muted, fontSize: 10.5, fontWeight: '700' },
-    currencyChipTextOn: { color: colors.signalInk },
-    balanceAmount: { color: colors.ink, fontSize: 30, fontWeight: '700', marginTop: spacing.xs, marginBottom: spacing.lg },
-    actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xl },
-    actionItem: { alignItems: 'center', gap: spacing.xs },
-    actionLabel: { color: colors.muted, fontSize: 10.5, fontWeight: '600' },
+    currencyChipOn: { backgroundColor: '#FFFFFF' },
+    currencyChipText: { color: 'rgba(255,255,255,0.85)', fontSize: 10.5, fontWeight: '700' },
+    currencyChipTextOn: { color: colors.signal },
+    balanceAmount: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', marginTop: spacing.xs },
+    actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xl },
+    actionItem: { alignItems: 'center', gap: spacing.xs, width: '19%' },
+    actionIconCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+    actionLabel: { color: 'rgba(255,255,255,0.9)', fontSize: 9.5, fontWeight: '700', textAlign: 'center' },
+    // Rounded-top sheet overlapping the band's bottom edge.
+    sheet: { backgroundColor: colors.bg, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, marginTop: -spacing.lg, padding: spacing.lg, paddingTop: spacing.xl },
     tabs: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
     tabBtn: { paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
     tabBtnOn: { backgroundColor: colors.signal, borderColor: 'transparent' },

@@ -38,7 +38,7 @@ function line(d: string, key?: string) {
   );
 }
 
-const LINE_ICONS: Record<string, (color: string) => React.ReactNode> = {
+export const LINE_ICONS: Record<string, (color: string) => React.ReactNode> = {
   fund: line('M12 5v14M5 12h14'),
   deposit: line('M12 5v14M5 12h14'),
   send: line('M22 2L11 13M22 2l-7 20-4-9-9-4z'),
