@@ -90,8 +90,8 @@ android {
         applicationId "com.yourcompany.financeapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 25
-        versionName "1.14.1"
+        versionCode 26
+        versionName "1.15.0"
     }
     signingConfigs {
         debug {
