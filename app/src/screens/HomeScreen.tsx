@@ -12,6 +12,7 @@ import type { ScreenKey } from '../components/Drawer';
 import IconBadge from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
 import BrandedLoader from '../components/BrandedLoader';
+import EyeToggle from '../components/EyeToggle';
 
 type TickerItem = { symbol: string; id: string; usd: number; changePct: number };
 type Transaction = TxnLike;
@@ -129,9 +130,7 @@ export default function HomeScreen({
           <View style={styles.balanceCard}>
             <View style={styles.balanceLabelRow}>
               <Text style={styles.balanceLabel}>AVAILABLE BALANCE</Text>
-              <TouchableOpacity onPress={toggleBalanceHidden} style={styles.eyeBtn} hitSlop={10}>
-                <Text style={styles.eyeGlyph}>{balanceHidden ? '🙈' : '👁'}</Text>
-              </TouchableOpacity>
+              <EyeToggle hidden={balanceHidden} onPress={toggleBalanceHidden} />
             </View>
             <Text style={styles.balanceAmount}>{balanceText}</Text>
             <View style={styles.balanceBtnRow}>
@@ -230,8 +229,6 @@ function getStyles(colors: ThemeColors) {
     balanceCard: { backgroundColor: colors.signal, borderRadius: radius.lg, padding: spacing.xl, marginBottom: spacing.lg },
     balanceLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     balanceLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 11, letterSpacing: 1, fontWeight: '700' },
-    eyeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-    eyeGlyph: { fontSize: 18 },
     balanceAmount: { color: colors.signalInk, fontSize: 32, fontWeight: '800', marginTop: spacing.sm, marginBottom: spacing.lg },
     balanceBtnRow: { flexDirection: 'row', gap: spacing.sm },
     balanceBtn: { flex: 1, borderRadius: radius.pill, paddingVertical: spacing.md, alignItems: 'center' },

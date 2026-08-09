@@ -11,6 +11,7 @@ import { buildTxnReceipt, txnIconKey, txnAmountLabel } from '../utils/transactio
 import type { ScreenKey } from '../components/Drawer';
 import IconBadge, { LINE_ICONS } from '../components/IconBadge';
 import ReceiptModal, { Receipt } from '../components/ReceiptModal';
+import EyeToggle from '../components/EyeToggle';
 
 type Holding = { symbol: string; icon: string; usd: number; changePct: number; qty: number };
 type Transaction = {
@@ -210,9 +211,7 @@ export default function WalletScreen({
           <Text style={styles.balanceLabel}>WALLET BALANCE</Text>
           <View style={styles.balRow}>
             <Text style={styles.balanceAmount}>{balanceText}</Text>
-            <TouchableOpacity onPress={toggleBalanceHidden} style={styles.eyeBtn} hitSlop={10}>
-              <Text style={styles.eyeGlyph}>{balanceHidden ? '🙈' : '👁'}</Text>
-            </TouchableOpacity>
+            <EyeToggle hidden={balanceHidden} onPress={toggleBalanceHidden} />
           </View>
 
           <Animated.View style={[styles.actionsRow, { opacity: fade }]}>
@@ -322,8 +321,6 @@ function getStyles(colors: ThemeColors) {
     filterChipTextOn: { color: colors.signalInk },
     balanceLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 11, letterSpacing: 1, fontWeight: '700', marginTop: spacing.lg },
     balRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-    eyeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-    eyeGlyph: { fontSize: 18 },
     currencySeg: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: radius.pill, padding: 3, gap: 2 },
     currencyChip: { paddingVertical: 4, paddingHorizontal: spacing.md, borderRadius: radius.pill },
     currencyChipOn: { backgroundColor: '#FFFFFF' },
