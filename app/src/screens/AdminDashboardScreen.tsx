@@ -866,9 +866,14 @@ function LimitsTab({ colors }: { colors: ThemeColors }) {
           <Text style={[styles.sectionHead, { color: colors.ember }]}>DANGER ZONE</Text>
         </View>
         <Text style={styles.dangerText}>
-          Resets every user's wallet balance and crypto holdings to 0, and cancels anything still pending. Accounts
-          and transaction history are kept. For wiping test data before handing the app to a client - not for
-          routine use, and it can't be undone.
+          Want to remove a specific amount from one user instead of resetting everyone? Use "Adjust Balance" on that
+          user in the Users tab - it takes any amount (negative to remove) and is tracked the same way as this.
+        </Text>
+        <Text style={styles.dangerText}>
+          This resets every user's wallet balance and crypto holdings to 0, and cancels anything still pending.
+          Nothing disappears untracked - each balance is logged as an Admin Debit (visible in that user's history)
+          before it's cleared, so it can be credited back the same way any adjustment can. Accounts and transaction
+          history are kept. For wiping test data before handing the app to a client - not for routine use.
         </Text>
         <Text style={styles.flabel}>TYPE "RESET" TO ENABLE</Text>
         <TextInput

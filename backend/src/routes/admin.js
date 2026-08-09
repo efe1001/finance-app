@@ -61,6 +61,12 @@ router.use(requireAuth, requireAdmin);
 // silently undo it). Accounts and transaction history are kept - only the
 // money figures are cleared. Meant for wiping test data before handing the
 // app to a client, not for routine use, hence the deliberate confirm phrase.
+//
+// Every balance/holding that gets zeroed is first recorded as an
+// admin_adjustment transaction (same shape as the per-user Adjust Balance
+// tool) showing exactly what it was before the reset - nothing just
+// disappears silently, and any of it can be restored later the same way a
+// normal adjustment would be, by crediting that amount back to the user.
 router.post('/reset-balances', async (req, res) => {
   const { confirm } = req.body;
   if (confirm !== 'RESET') {
@@ -70,8 +76,29 @@ router.post('/reset-balances', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    const { rows: balances } = await client.query(
+      'SELECT id, wallet_balance_ngn FROM users WHERE wallet_balance_ngn != 0 FOR UPDATE',
+    );
+    for (const u of balances) {
+      await client.query(
+        `INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, admin_note, admin_id)
+         VALUES ($1, 'admin_adjustment', 'Admin Debit', 'Cleared by account reset', $2, 'Successful', $3, $4)`,
+        [u.id, -Number(u.wallet_balance_ngn), `Balance before reset: ₦${Number(u.wallet_balance_ngn).toLocaleString()}`, req.user.id],
+      );
+    }
     await client.query('UPDATE users SET wallet_balance_ngn = 0');
+
+    const { rows: heldAssets } = await client.query('SELECT user_id, asset, amount FROM holdings WHERE amount != 0 FOR UPDATE');
+    for (const h of heldAssets) {
+      await client.query(
+        `INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, asset, qty, admin_note, admin_id)
+         VALUES ($1, 'admin_adjustment', 'Admin Debit', 'Holding cleared by account reset', 0, 'Successful', $2, $3, $4, $5)`,
+        [h.user_id, h.asset, h.amount, `Holding before reset: ${Number(h.amount)} ${h.asset}`, req.user.id],
+      );
+    }
     await client.query('DELETE FROM holdings');
+
     await client.query(
       "UPDATE transactions SET status = 'Rejected', admin_note = 'Cleared by account reset' WHERE status = 'Pending'",
     );
