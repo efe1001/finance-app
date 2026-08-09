@@ -25,6 +25,8 @@ const TICKER_IDS = [
 const QUICK_ACTIONS: { key: ScreenKey; label: string; icon: string }[] = [
   { key: 'deposit', label: 'Add Money', icon: 'fund' },
   { key: 'trade', label: 'Trade', icon: 'trade' },
+  { key: 'swap', label: 'Swap', icon: 'swap' },
+  { key: 'transfer', label: 'Send Money', icon: 'transfer' },
   { key: 'p2p', label: 'P2P', icon: 'p2p' },
   { key: 'giftcards', label: 'Gift Cards', icon: 'giftcard' },
   { key: 'bills', label: 'Bills', icon: 'bills' },
@@ -234,8 +236,11 @@ function getStyles(colors: ThemeColors) {
     depositBtn: { backgroundColor: colors.signal },
     withdrawBtn: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
     balanceBtnText: { color: colors.ink, fontWeight: '700', fontSize: 14 },
-    quickActions: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.lg },
-    qaItem: { alignItems: 'center', gap: spacing.xs },
+    // Wraps instead of a single non-shrinking row - the row only had headroom
+    // for ~5 items before this and now carries 7, so wrapping keeps future
+    // additions safe without needing to re-tune spacing every time.
+    quickActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.lg, marginBottom: spacing.lg },
+    qaItem: { alignItems: 'center', gap: spacing.xs, width: '23%' },
     qaLabel: { color: colors.muted, fontSize: 10, textAlign: 'center' },
     tickerHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
     currencySeg: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: radius.pill, padding: 3, gap: 2 },
