@@ -10,7 +10,7 @@ const cryptoRoutes = require('./routes/crypto');
 const billsRoutes = require('./routes/bills');
 const giftcardsRoutes = require('./routes/giftcards');
 const adminRoutes = require('./routes/admin');
-const flutterwaveRoutes = require('./routes/flutterwave');
+const { router: flutterwaveRoutes } = require('./routes/flutterwave');
 const quidaxRoutes = require('./routes/quidax');
 
 const app = express();

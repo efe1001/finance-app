@@ -3,6 +3,7 @@ const axios = require('axios');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { sendPush } = require('../firebase');
+const { initiateTransfer } = require('./flutterwave');
 
 const router = express.Router();
 
@@ -309,10 +310,21 @@ router.post('/deposit', requireAuth, async (req, res) => {
   res.status(201).json({ status: 'Pending', message: 'Deposit submitted — awaiting admin approval.' });
 });
 
+// Pays a withdrawal out automatically via Flutterwave instead of sitting in
+// the admin approval queue - the balance is deducted and reserved
+// immediately (status 'Processing'), then the real transfer is attempted.
+// If Flutterwave rejects it outright (bad account, insufficient Payout
+// balance, etc.) the deduction is rolled back right away since nothing was
+// actually sent. If the transfer is accepted but not yet confirmed complete,
+// it stays 'Processing' until the webhook (or a manual recheck) resolves it
+// - same two-step pattern deposits already use, just for money leaving
+// instead of arriving. Every outcome still lands in the transactions table,
+// so admins retain a full record even though they're no longer the ones
+// clicking approve.
 router.post('/withdraw', requireAuth, async (req, res) => {
   const { amountNgn, accountNumber, bankName, bankCode, accountName, narration } = req.body;
-  if (!amountNgn || amountNgn <= 0 || !accountNumber || !bankName) {
-    return res.status(400).json({ error: 'amountNgn, accountNumber and bankName are required' });
+  if (!amountNgn || amountNgn <= 0 || !accountNumber || !bankName || !bankCode) {
+    return res.status(400).json({ error: 'amountNgn, accountNumber, bankName and bankCode are required' });
   }
 
   const settingsMap = {};
@@ -329,19 +341,58 @@ router.post('/withdraw', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Insufficient balance' });
   }
 
-  await pool.query(
-    'INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, address) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-    [
-      req.user.id,
-      'withdrawal',
-      'Withdraw to Bank',
-      narration || `${accountName ? accountName + ' · ' : ''}${bankName} · ${accountNumber}`,
-      -Math.abs(amountNgn),
-      'Pending',
-      `${bankCode || ''}:${bankName}:${accountNumber}`,
-    ],
-  );
-  res.status(201).json({ status: 'Pending', message: 'Withdrawal submitted — awaiting admin approval.' });
+  const client = await pool.connect();
+  let txnId;
+  try {
+    await client.query('BEGIN');
+    await client.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn - $1 WHERE id = $2', [amountNgn, req.user.id]);
+    const { rows } = await client.query(
+      `INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, address)
+       VALUES ($1, 'withdrawal', 'Withdraw to Bank', $2, $3, 'Processing', $4) RETURNING id`,
+      [
+        req.user.id,
+        narration || `${accountName ? accountName + ' · ' : ''}${bankName} · ${accountNumber}`,
+        -Math.abs(amountNgn),
+        `${bankCode}:${bankName}:${accountNumber}`,
+      ],
+    );
+    txnId = rows[0].id;
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  const reference = `FA-OUT-${txnId}-${Date.now()}`;
+  try {
+    const transfer = await initiateTransfer({
+      accountBank: bankCode,
+      accountNumber,
+      amount: amountNgn,
+      narration: narration || 'Finance App withdrawal',
+      reference,
+    });
+    await pool.query('UPDATE transactions SET provider_ref = $1 WHERE id = $2', [reference, txnId]);
+
+    if (transfer.status === 'FAILED') {
+      await pool.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE id = $2', [amountNgn, req.user.id]);
+      await pool.query("UPDATE transactions SET status = 'Rejected', admin_note = 'Transfer failed at bank' WHERE id = $1", [txnId]);
+      return res.status(502).json({ error: 'The transfer was rejected by the bank. Your balance has been refunded.' });
+    }
+
+    res.status(201).json({ status: 'Processing', message: 'Your withdrawal is being sent to your bank now.' });
+  } catch (err) {
+    // Flutterwave rejected the transfer outright before ever accepting it -
+    // refund immediately, nothing was actually sent.
+    await pool.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE id = $2', [amountNgn, req.user.id]);
+    await pool.query(
+      "UPDATE transactions SET status = 'Rejected', admin_note = $1 WHERE id = $2",
+      [err.response?.data?.message || err.message, txnId],
+    );
+    res.status(502).json({ error: err.response?.data?.message || 'Could not start the transfer, please try again.' });
+  }
 });
 
 // The single bank account payouts go to (gift card sales, and a quick-fill for

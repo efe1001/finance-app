@@ -24,7 +24,11 @@ type PendingTxn = {
   user_email: string;
 };
 
-const STATUS_FILTERS = ['Pending', 'Successful', 'Rejected'] as const;
+// 'Processing' covers automated withdrawals sent to Flutterwave but not yet
+// confirmed complete - they never sit 'Pending' the way manually-approved
+// transaction types do, so without this filter admins would have no way to
+// see in-flight withdrawals here at all.
+const STATUS_FILTERS = ['Pending', 'Processing', 'Successful', 'Rejected'] as const;
 
 type AdminUser = {
   id: number;

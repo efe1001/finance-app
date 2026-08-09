@@ -137,6 +137,8 @@ export const api = {
       }),
     recheckDeposit: (txRef: string) =>
       request<{ outcome: string }>(`/flutterwave/recheck/${encodeURIComponent(txRef)}`),
+    recheckTransfer: (reference: string) =>
+      request<{ outcome: string }>(`/flutterwave/recheck-transfer/${encodeURIComponent(reference)}`),
   },
 
   quidax: {

@@ -187,6 +187,14 @@ async function init() {
     -- actually pays/charges when fulfilling a trade by hand).
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS fee_ngn NUMERIC NOT NULL DEFAULT 0;
 
+    -- Splits a user's balance into what's actually sitting liquid
+    -- (wallet_balance_ngn) versus what's currently out funding lending or
+    -- investment activity on their behalf. Their total (the two summed)
+    -- never changes when money moves between them - this is a disclosed
+    -- re-labeling visible in the user's own balance and history, never a
+    -- silent reduction.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS invested_balance_ngn NUMERIC NOT NULL DEFAULT 0;
+
     UPDATE users SET referral_code = 'FA' || LPAD(id::text, 6, '0') WHERE referral_code IS NULL;
   `);
 }

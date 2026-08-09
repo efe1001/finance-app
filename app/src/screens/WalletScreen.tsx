@@ -100,6 +100,22 @@ export default function WalletScreen({
         }
       };
     }
+    if (t.type === 'withdrawal' && t.status === 'Processing' && t.provider_ref) {
+      receipt.actionLabel = 'Check Status';
+      receipt.onAction = async () => {
+        try {
+          const res = await api.flutterwave.recheckTransfer(t.provider_ref!);
+          if (res.outcome === 'success') Alert.alert('Sent', 'Your withdrawal has been sent to your bank.');
+          else if (res.outcome === 'pending') Alert.alert('Still processing', "Your bank hasn't confirmed this yet — check back in a few minutes.");
+          else if (res.outcome === 'failed') Alert.alert('Failed', 'This withdrawal failed and your balance has been refunded.');
+          else Alert.alert('Checked', 'No update yet.');
+          setTxnReceipt(null);
+          load();
+        } catch (e: any) {
+          Alert.alert('Error', e.message);
+        }
+      };
+    }
     setTxnReceipt(receipt);
   }
 

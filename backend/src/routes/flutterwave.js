@@ -167,9 +167,16 @@ router.post('/webhook', express.json(), async (req, res) => {
     return res.status(401).send('Invalid signature');
   }
 
-  const txRef = req.body?.data?.tx_ref || req.body?.txRef;
   try {
-    await resolveDeposit(txRef);
+    // Deposits (charge.completed) and payouts (transfer.completed) both land
+    // on this one webhook URL - branch on event type so a transfer
+    // confirmation doesn't get misread as a deposit reference.
+    if (req.body?.event === 'transfer.completed') {
+      await resolveWithdrawal(req.body?.data?.reference);
+    } else {
+      const txRef = req.body?.data?.tx_ref || req.body?.txRef;
+      await resolveDeposit(txRef);
+    }
   } catch (err) {
     console.error('Webhook processing failed:', err.message);
   }
@@ -187,6 +194,99 @@ router.get('/recheck/:txRef', requireAuth, async (req, res) => {
 
   try {
     const result = await resolveDeposit(req.params.txRef);
+    res.json(result);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// Sends a real payout via Flutterwave's Transfers API - this is what makes a
+// withdrawal actually pay the user automatically instead of an admin sending
+// it by hand. A successful call here only means Flutterwave accepted the
+// transfer for processing (status "NEW"); it isn't necessarily complete yet,
+// which is why the caller stores the reference and waits on the webhook (or
+// a manual recheck) rather than treating this response as final.
+async function initiateTransfer({ accountBank, accountNumber, amount, narration, reference }) {
+  const { data } = await flw.post('/transfers', {
+    account_bank: accountBank,
+    account_number: accountNumber,
+    amount,
+    narration,
+    currency: 'NGN',
+    reference,
+  });
+  return data.data;
+}
+
+// Mirrors resolveDeposit's job but for money leaving instead of arriving -
+// the transaction sits 'Processing' (balance already deducted at submission)
+// until Flutterwave confirms one way or the other. A failure here means the
+// bank transfer itself didn't go through, so the deducted balance is
+// refunded - nothing was actually sent.
+async function resolveWithdrawal(reference) {
+  if (!reference) return { outcome: 'error', message: 'No reference supplied' };
+
+  let transfer;
+  try {
+    const { data } = await flw.get(`/transfers?reference=${encodeURIComponent(reference)}`);
+    transfer = data.data?.[0];
+  } catch (err) {
+    return { outcome: 'error', message: err.response?.data?.message || err.message };
+  }
+  if (!transfer) return { outcome: 'error', message: 'Flutterwave has no record of this transfer' };
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      "SELECT * FROM transactions WHERE provider_ref = $1 AND status = 'Processing' FOR UPDATE",
+      [reference],
+    );
+    const txn = rows[0];
+    if (!txn) {
+      await client.query('ROLLBACK');
+      return { outcome: 'already_processed' };
+    }
+
+    if (transfer.status === 'SUCCESSFUL') {
+      await client.query("UPDATE transactions SET status = 'Successful' WHERE id = $1", [txn.id]);
+      await client.query('COMMIT');
+      const { rows: u } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [txn.user_id]);
+      sendPush(u[0]?.fcm_token, 'Withdrawal sent', `₦${Math.abs(txn.amount_ngn).toLocaleString()} has been sent to your bank account.`);
+      return { outcome: 'success' };
+    }
+    if (transfer.status === 'FAILED') {
+      await client.query("UPDATE transactions SET status = 'Rejected', admin_note = 'Transfer failed at bank' WHERE id = $1", [txn.id]);
+      await client.query('UPDATE users SET wallet_balance_ngn = wallet_balance_ngn + $1 WHERE id = $2', [
+        Math.abs(txn.amount_ngn),
+        txn.user_id,
+      ]);
+      await client.query('COMMIT');
+      const { rows: u } = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [txn.user_id]);
+      sendPush(u[0]?.fcm_token, 'Withdrawal failed', `Your ₦${Math.abs(txn.amount_ngn).toLocaleString()} withdrawal failed and has been refunded to your wallet.`);
+      return { outcome: 'failed' };
+    }
+    await client.query('ROLLBACK');
+    return { outcome: 'pending' };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Lets the app (or support) manually re-check a withdrawal still showing
+// Processing, instead of waiting on the webhook. Safe to call repeatedly -
+// resolveWithdrawal only ever acts on a transaction still Processing, and
+// only for the caller's own transaction.
+router.get('/recheck-transfer/:reference', requireAuth, async (req, res) => {
+  const { rows } = await pool.query('SELECT user_id FROM transactions WHERE provider_ref = $1', [req.params.reference]);
+  if (!rows.length) return res.status(404).json({ error: 'No such transaction' });
+  if (rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Not your transaction' });
+
+  try {
+    const result = await resolveWithdrawal(req.params.reference);
     res.json(result);
   } catch (err) {
     res.status(502).json({ error: err.message });
@@ -220,4 +320,4 @@ function htmlPage(title, message) {
     <h2>${title}</h2><p style="color:#929CB0;">${message}</p></body></html>`;
 }
 
-module.exports = router;
+module.exports = { router, initiateTransfer };
