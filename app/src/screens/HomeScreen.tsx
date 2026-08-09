@@ -136,10 +136,10 @@ export default function HomeScreen({
             <Text style={styles.balanceAmount}>{balanceText}</Text>
             <View style={styles.balanceBtnRow}>
               <TouchableOpacity style={[styles.balanceBtn, styles.depositBtn]} onPress={() => onNavigate('deposit')}>
-                <Text style={styles.balanceBtnText}>Deposit ↙</Text>
+                <Text style={styles.depositBtnText}>Deposit ↙</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.balanceBtn, styles.withdrawBtn]} onPress={() => onNavigate('withdraw')}>
-                <Text style={styles.balanceBtnText}>Withdraw ↗</Text>
+                <Text style={styles.withdrawBtnText}>Withdraw ↗</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -225,17 +225,20 @@ function getStyles(colors: ThemeColors) {
     iconBtnGlyph: { color: colors.ink, fontSize: 16 },
     greetHi: { color: colors.muted, fontSize: 12 },
     greetWho: { color: colors.ink, fontSize: 18, fontWeight: '700', marginTop: 2 },
-    balanceCard: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: spacing.xl, marginBottom: spacing.lg },
+    // Solid violet hero - flat fill, no gradient (matching the rest of the new
+    // icon/theme system, which deliberately avoids gradients and metallics).
+    balanceCard: { backgroundColor: colors.signal, borderRadius: radius.lg, padding: spacing.xl, marginBottom: spacing.lg },
     balanceLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    balanceLabel: { color: colors.muted, fontSize: 11, letterSpacing: 1 },
+    balanceLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 11, letterSpacing: 1, fontWeight: '700' },
     eyeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
     eyeGlyph: { fontSize: 18 },
-    balanceAmount: { color: colors.ink, fontSize: 32, fontWeight: '700', marginTop: spacing.sm, marginBottom: spacing.lg },
+    balanceAmount: { color: colors.signalInk, fontSize: 32, fontWeight: '800', marginTop: spacing.sm, marginBottom: spacing.lg },
     balanceBtnRow: { flexDirection: 'row', gap: spacing.sm },
     balanceBtn: { flex: 1, borderRadius: radius.pill, paddingVertical: spacing.md, alignItems: 'center' },
-    depositBtn: { backgroundColor: colors.signal },
-    withdrawBtn: { backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
-    balanceBtnText: { color: colors.ink, fontWeight: '700', fontSize: 14 },
+    depositBtn: { backgroundColor: colors.signalInk },
+    withdrawBtn: { backgroundColor: 'rgba(255,255,255,0.16)' },
+    depositBtnText: { color: colors.signal, fontWeight: '700', fontSize: 14 },
+    withdrawBtnText: { color: colors.signalInk, fontWeight: '700', fontSize: 14 },
     // Wraps instead of a single non-shrinking row - the row only had headroom
     // for ~5 items before this and now carries 7, so wrapping keeps future
     // additions safe without needing to re-tune spacing every time.
