@@ -283,6 +283,45 @@ router.get('/stats', async (req, res) => {
   });
 });
 
+// Logs the admin withdrawing their own earned revenue to a bank account -
+// same idea as every other manual flow in this app (deposits, withdrawals,
+// crypto trades), the real bank transfer still happens by hand outside the
+// app via Flutterwave. This never touches wallet_balance_ngn or any user
+// row - amount_ngn stays 0, fee_ngn goes negative instead, which is exactly
+// what /stats sums for the revenue figure, so it naturally reduces
+// "available" revenue without pretending to move real money itself.
+router.post('/withdraw-revenue', async (req, res) => {
+  const { amountNgn, bankName, accountNumber, accountName, bankCode } = req.body;
+  if (!amountNgn || amountNgn <= 0 || !accountNumber || !bankName) {
+    return res.status(400).json({ error: 'amountNgn, accountNumber and bankName are required' });
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO transactions (user_id, type, title, subtitle, amount_ngn, status, address, fee_ngn, admin_id)
+     VALUES ($1, 'admin_withdrawal', 'Revenue Withdrawal', $2, 0, 'Successful', $3, $4, $1)
+     RETURNING id, created_at`,
+    [
+      req.user.id,
+      `${accountName ? accountName + ' · ' : ''}${bankName} · ${accountNumber}`,
+      `${bankCode || ''}:${bankName}:${accountNumber}`,
+      -Number(amountNgn),
+    ],
+  );
+
+  res.status(201).json({
+    id: rows[0].id,
+    message: `Logged ₦${Number(amountNgn).toLocaleString()} to ${bankName} · ${accountNumber}. Remember to actually send it from your Flutterwave dashboard.`,
+  });
+});
+
+router.get('/revenue-withdrawals', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, subtitle, fee_ngn, created_at FROM transactions
+     WHERE type = 'admin_withdrawal' ORDER BY created_at DESC LIMIT 50`,
+  );
+  res.json(rows.map(r => ({ id: r.id, detail: r.subtitle, amountNgn: -Number(r.fee_ngn), createdAt: r.created_at })));
+});
+
 // --- Gift card payout tiers (percentage of face value, better rate at higher amounts) ---
 
 function mapTier(r) {

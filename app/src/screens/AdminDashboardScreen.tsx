@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Modal, Alert, Clipboard, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl, Modal, Alert, Clipboard, Linking, FlatList, ActivityIndicator } from 'react-native';
 import { spacing, radius, ThemeColors } from '../theme';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -456,13 +456,197 @@ function NinReviewTab({ colors }: { colors: ThemeColors }) {
   );
 }
 
+type Bank = { code: string; name: string };
+
+function RevenueWithdrawCard({ colors, availableRevenue, onWithdrawn }: { colors: ThemeColors; availableRevenue: number; onWithdrawn: () => void }) {
+  const styles = getStyles(colors);
+  const [amount, setAmount] = useState('');
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [bank, setBank] = useState<Bank | null>(null);
+  const [bankModalVisible, setBankModalVisible] = useState(false);
+  const [bankSearch, setBankSearch] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [resolvedName, setResolvedName] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [history, setHistory] = useState<{ id: number; detail: string; amountNgn: number; createdAt: string }[]>([]);
+
+  const loadHistory = useCallback(() => {
+    api.admin.revenueWithdrawals().then(setHistory).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api.flutterwave.banks().then(setBanks).catch(() => {});
+    loadHistory();
+  }, [loadHistory]);
+
+  const resolveAccount = useCallback(async (num: string, b: Bank) => {
+    setResolving(true);
+    setResolveError(null);
+    setResolvedName(null);
+    try {
+      const res = await api.flutterwave.resolveAccount(num, b.code);
+      setResolvedName(res.accountName);
+    } catch (e: any) {
+      setResolveError(e.message || 'Could not resolve account name');
+    } finally {
+      setResolving(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (accountNumber.length === 10 && bank) resolveAccount(accountNumber, bank);
+    else {
+      setResolvedName(null);
+      setResolveError(null);
+    }
+  }, [accountNumber, bank, resolveAccount]);
+
+  const amountNgn = parseFloat(amount || '0');
+  const canSubmit = amountNgn > 0 && !!bank && accountNumber.length === 10 && !!resolvedName && !resolving;
+  const filteredBanks = banks.filter(b => b.name.toLowerCase().includes(bankSearch.toLowerCase()));
+
+  async function doSubmit() {
+    if (!bank) return;
+    setSubmitting(true);
+    try {
+      const res = await api.admin.withdrawRevenue({
+        amountNgn,
+        bankName: bank.name,
+        bankCode: bank.code,
+        accountNumber,
+        accountName: resolvedName || undefined,
+      });
+      Alert.alert('Logged', res.message);
+      setAmount('');
+      setAccountNumber('');
+      setBank(null);
+      setResolvedName(null);
+      loadHistory();
+      onWithdrawn();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function submit() {
+    if (!canSubmit || !bank) return;
+    Alert.alert(
+      'Log this withdrawal?',
+      `This records ₦${amountNgn.toLocaleString()} to ${resolvedName} · ${bank.name} · ${accountNumber} as taken out. It does not move real money - you still need to send it yourself from Flutterwave.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Log It', onPress: doSubmit },
+      ],
+    );
+  }
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.fieldHeadRow}>
+        <IconBadge name="vault" size={32} />
+        <Text style={styles.sectionHead}>WITHDRAW YOUR REVENUE</Text>
+      </View>
+      <Text style={styles.dangerText}>
+        Logs a withdrawal of your earned revenue to a bank account - never touches any user's balance. You still
+        send the real money yourself from your Flutterwave dashboard; this just keeps a clean record here.
+        Available: ₦{availableRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+      </Text>
+
+      <Text style={styles.flabel}>AMOUNT (₦)</Text>
+      <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
+        <TextInput style={[styles.input, { flex: 1 }]} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.muted} />
+        <TouchableOpacity style={styles.maxBtn} onPress={() => setAmount(String(availableRevenue))}>
+          <Text style={styles.maxBtnText}>Use All Revenue</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={styles.flabel}>BANK</Text>
+      <TouchableOpacity style={[styles.input, { marginBottom: spacing.sm }]} onPress={() => setBankModalVisible(true)}>
+        <Text style={bank ? { color: colors.ink } : { color: colors.muted }}>{bank ? bank.name : 'Select Bank'}</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.flabel}>ACCOUNT NUMBER</Text>
+      <TextInput
+        style={[styles.input, { marginBottom: spacing.sm }]}
+        value={accountNumber}
+        onChangeText={t => setAccountNumber(t.replace(/[^0-9]/g, '').slice(0, 10))}
+        keyboardType="number-pad"
+        maxLength={10}
+        placeholderTextColor={colors.muted}
+      />
+
+      {resolving && (
+        <View style={styles.resolveRow}>
+          <ActivityIndicator size="small" color={colors.signal} />
+          <Text style={styles.resolveText}>Verifying account…</Text>
+        </View>
+      )}
+      {resolvedName && <Text style={styles.resolvedName}>✓ {resolvedName}</Text>}
+      {resolveError && !resolving && <Text style={styles.resolveErrorText}>{resolveError}</Text>}
+
+      <TouchableOpacity style={[styles.cta, (!canSubmit || submitting) && { opacity: 0.5 }]} onPress={submit} disabled={!canSubmit || submitting}>
+        <Text style={styles.ctaText}>{submitting ? 'Logging…' : 'Log Withdrawal'}</Text>
+      </TouchableOpacity>
+
+      {history.length > 0 && (
+        <>
+          <Text style={[styles.flabel, { marginTop: spacing.lg, marginBottom: spacing.sm }]}>RECENT WITHDRAWALS</Text>
+          {history.map(h => (
+            <View key={h.id} style={styles.row}>
+              <Text style={[styles.rowLabel, { flex: 1 }]} numberOfLines={1}>{h.detail}</Text>
+              <Text style={styles.rowLabel}>₦{h.amountNgn.toLocaleString()}</Text>
+            </View>
+          ))}
+        </>
+      )}
+
+      <Modal visible={bankModalVisible} animationType="slide" onRequestClose={() => setBankModalVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.bg }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalHeaderTitle}>Select Bank</Text>
+            <TouchableOpacity onPress={() => setBankModalVisible(false)}>
+              <Text style={styles.modalClose}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ padding: spacing.lg }}>
+            <TextInput style={styles.input} value={bankSearch} onChangeText={setBankSearch} placeholder="Search banks…" placeholderTextColor={colors.muted} />
+          </View>
+          <FlatList
+            data={filteredBanks}
+            keyExtractor={b => b.code}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.row}
+                onPress={() => {
+                  setBank(item);
+                  setBankModalVisible(false);
+                  setBankSearch('');
+                }}>
+                <Text style={styles.rowLabel}>{item.name}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 function StatsTab({ colors }: { colors: ThemeColors }) {
   const styles = getStyles(colors);
   const [stats, setStats] = useState<any>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api.admin.stats().then(setStats);
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   if (!stats) return <View style={styles.content} />;
 
@@ -470,7 +654,8 @@ function StatsTab({ colors }: { colors: ThemeColors }) {
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-      <Text style={styles.sectionHead}>ACTIVITY BY TYPE & STATUS</Text>
+      <RevenueWithdrawCard colors={colors} availableRevenue={stats.totalRevenueNgn} onWithdrawn={load} />
+      <Text style={[styles.sectionHead, { marginTop: spacing.lg }]}>ACTIVITY BY TYPE & STATUS</Text>
       {stats.breakdown.map((row: any, idx: number) => (
         <View key={idx} style={styles.barRow}>
           <View style={styles.barRowTop}>
@@ -988,6 +1173,17 @@ function getStyles(colors: ThemeColors) {
     ctaText: { color: colors.signalInk, fontWeight: '700', fontSize: 14 },
     dangerText: { color: colors.muted, fontSize: 11.5, lineHeight: 17, marginBottom: spacing.md },
     dangerCta: { backgroundColor: colors.ember, borderRadius: radius.md, padding: spacing.lg, alignItems: 'center', marginTop: spacing.md },
+    maxBtn: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingHorizontal: spacing.md, justifyContent: 'center' },
+    maxBtnText: { color: colors.ink, fontSize: 11.5, fontWeight: '700' },
+    resolveRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+    resolveText: { color: colors.muted, fontSize: 12 },
+    resolvedName: { color: colors.jade, fontSize: 13, fontWeight: '700', marginBottom: spacing.sm },
+    resolveErrorText: { color: colors.ember, fontSize: 12, marginBottom: spacing.sm },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.lg, paddingTop: spacing.xxl, borderBottomWidth: 1, borderBottomColor: colors.line },
+    modalHeaderTitle: { color: colors.ink, fontSize: 16, fontWeight: '700' },
+    modalClose: { color: colors.muted, fontSize: 18 },
+    row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.line },
+    rowLabel: { color: colors.ink, fontSize: 13.5, fontWeight: '600' },
 
     calcBrandChip: { paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line },
     calcBrandChipOn: { backgroundColor: colors.signal, borderColor: 'transparent' },

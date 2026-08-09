@@ -211,6 +211,10 @@ export const api = {
     stats: () => request<any>('/admin/stats'),
     resetBalances: () =>
       request<{ ok: true; message: string }>('/admin/reset-balances', { method: 'POST', body: JSON.stringify({ confirm: 'RESET' }) }),
+    withdrawRevenue: (body: { amountNgn: number; bankName: string; accountNumber: string; accountName?: string; bankCode?: string }) =>
+      request<{ id: number; message: string }>('/admin/withdraw-revenue', { method: 'POST', body: JSON.stringify(body) }),
+    revenueWithdrawals: () =>
+      request<{ id: number; detail: string; amountNgn: number; createdAt: string }[]>('/admin/revenue-withdrawals'),
     getSettings: () => request<Record<string, string>>('/admin/settings'),
     updateSettings: (settings: Record<string, string | number>) =>
       request<{ ok: true }>('/admin/settings', { method: 'PUT', body: JSON.stringify(settings) }),
